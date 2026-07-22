@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isWithinVocLookback, parsePlatformTime } from './voc-collector'
+import { isWithinVocLookback, parsePlatformTime, reconcileCompletedByArtifacts } from './voc-collector'
 
 describe('VOC 平台发布时间解析', () => {
   it('解析抖音完整发布时间并保留上海时区含义', () => {
@@ -23,5 +23,23 @@ describe('VOC 平台发布时间解析', () => {
     const cutoff = Date.parse('2026-07-21T02:00:00.000Z')
     expect(isWithinVocLookback('2026-07-21T02:00:00.000Z', cutoff)).toBe(true)
     expect(isWithinVocLookback('2026-07-21T01:59:59.999Z', cutoff)).toBe(false)
+  })
+})
+
+describe('VOC 旧采集状态修复', () => {
+  it('只保留存在真实采集产物的完成记录', () => {
+    const completed = {
+      'weibo-fengge': ['kept', 'missing'],
+      'douyin-xianxian': ['also-kept']
+    }
+    const artifacts = new Set([
+      'weibo-fengge\u0000kept',
+      'douyin-xianxian\u0000also-kept'
+    ])
+
+    expect(reconcileCompletedByArtifacts(completed, artifacts)).toEqual({
+      'weibo-fengge': ['kept'],
+      'douyin-xianxian': ['also-kept']
+    })
   })
 })

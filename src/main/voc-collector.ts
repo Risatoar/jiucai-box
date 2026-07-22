@@ -15,9 +15,36 @@ interface CollectorState {
   ignoredBySource: Record<string, string[]>
   checkedBySource: Record<string, string>
   artifactMissingRetryBySource: Record<string, string[]>
+  artifactReconciliationVersion: number
 }
 interface DiscoveredItem { contentId: string; url: string; hint?: string; pinned?: boolean }
 interface DetailResult { time: string; text: string; mediaType: VocInboxItem['mediaType']; mediaUrl?: string; authorProfileId?: string; authorName?: string }
+
+const ARTIFACT_RECONCILIATION_VERSION = 1
+const artifactKey = (sourceId: string, contentId: string) => `${sourceId}\u0000${contentId}`
+
+export const reconcileCompletedByArtifacts = (
+  completedBySource: Record<string, string[]>,
+  collectedArtifactKeys: ReadonlySet<string>
+) => Object.fromEntries(Object.entries(completedBySource).map(([sourceId, contentIds]) => [
+  sourceId,
+  contentIds.filter((contentId) => collectedArtifactKeys.has(artifactKey(sourceId, contentId)))
+]))
+
+const readCollectedArtifactKeys = async () => {
+  const keys = new Set<string>()
+  for (const directory of ['inbox', 'processed', 'events']) {
+    const files = (await readdir(join(root(), directory), { recursive: true }).catch(() => []))
+      .filter((file) => file.endsWith('.json'))
+    for (const file of files) {
+      try {
+        const item = JSON.parse(await readFile(join(root(), directory, file), 'utf8')) as Partial<VocInboxItem>
+        if (item.sourceId && item.contentId) keys.add(artifactKey(item.sourceId, item.contentId))
+      } catch { /* malformed files are handled by the normal ingestion path */ }
+    }
+  }
+  return keys
+}
 
 const readState = async (): Promise<CollectorState> => {
   let stored: Partial<CollectorState> = {}
@@ -28,7 +55,8 @@ const readState = async (): Promise<CollectorState> => {
     completedBySource: stored.completedBySource || {},
     ignoredBySource: stored.ignoredBySource || {},
     checkedBySource: stored.checkedBySource || {},
-    artifactMissingRetryBySource: stored.artifactMissingRetryBySource || {}
+    artifactMissingRetryBySource: stored.artifactMissingRetryBySource || {},
+    artifactReconciliationVersion: stored.artifactReconciliationVersion || 0
   }
   const files = (await readdir(join(root(), 'events'), { recursive: true }).catch(() => []))
     .filter((file) => file.endsWith('.json'))
@@ -38,6 +66,13 @@ const readState = async (): Promise<CollectorState> => {
       const completed = state.completedBySource[event.sourceId] || []
       if (!completed.includes(event.contentId)) state.completedBySource[event.sourceId] = [...completed, event.contentId]
     } catch { /* ignore malformed historical files; ingestion will surface them separately */ }
+  }
+  if (state.artifactReconciliationVersion < ARTIFACT_RECONCILIATION_VERSION) {
+    const artifacts = await readCollectedArtifactKeys()
+    state.completedBySource = reconcileCompletedByArtifacts(state.completedBySource, artifacts)
+    state.artifactMissingRetryBySource = {}
+    state.artifactReconciliationVersion = ARTIFACT_RECONCILIATION_VERSION
+    await writeJson(statePath(), state)
   }
   return state
 }
@@ -226,12 +261,16 @@ const collectSource = async (source: VocSource, state: CollectorState) => {
     try {
       const content = await readDetail(source, item, cutoff)
       if (!content) continue
-      if (completed.has(item.contentId) && !artifactMissingRetried.has(item.contentId)) artifactMissingRetried.add(item.contentId)
+      const repairingMissingArtifact = completed.has(item.contentId) && !artifactMissingRetried.has(item.contentId)
       completed.add(item.contentId)
       if (isWithinVocLookback(content.publishedAt, cutoff)) {
         await writeJson(join(root(), 'inbox', `${source.id}-${item.contentId}.json`), content)
+        if (repairingMissingArtifact) artifactMissingRetried.add(item.contentId)
         consecutiveOlder = 0
-      } else consecutiveOlder += 1
+      } else {
+        if (repairingMissingArtifact) artifactMissingRetried.add(item.contentId)
+        consecutiveOlder += 1
+      }
       if (consecutiveOlder >= 3 && !item.pinned) stopRegularItems = true
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
