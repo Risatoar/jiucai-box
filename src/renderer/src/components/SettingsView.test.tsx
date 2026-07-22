@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { AppUpdateStatus, UserProfile } from '../../../shared/types'
+import type { AiConfig, AppUpdateStatus, UserProfile } from '../../../shared/types'
 import { SettingsView } from './SettingsView'
 
 const profile: UserProfile = {
@@ -17,11 +17,11 @@ const profile: UserProfile = {
 const updateStatus: AppUpdateStatus = { state: 'idle', currentVersion: '0.1.0', message: '已是最新版本' }
 const noop = async () => undefined
 
-const renderSettings = (configured: boolean, group = false, initialTab: 'notify' | 'data' = 'notify') => renderToStaticMarkup(<SettingsView
+const renderSettings = (configured: boolean, group = false, initialTab: 'notify' | 'data' | 'ai' = 'notify', aiConfig: AiConfig = { provider: 'codex-local', baseUrl: '', model: '', timeoutSeconds: 120 }) => renderToStaticMarkup(<SettingsView
   initialTab={initialTab}
   userProfile={profile}
   onUserProfile={async () => undefined}
-  aiConfig={{ provider: 'codex-local', baseUrl: '', model: '' }}
+  aiConfig={aiConfig}
   onAiConfig={noop}
   factConnected
   discipline="CAUTION"
@@ -77,5 +77,14 @@ describe('SettingsView 交易状态', () => {
     expect(html).toContain('交易状态 · 警戒')
     expect(html).toContain('复核后恢复正常')
     expect(html).toContain('历史记录会保留')
+  })
+})
+
+describe('SettingsView AI 设置', () => {
+  it('shows a configurable model timeout with the 120 second default', () => {
+    const html = renderSettings(false, false, 'ai')
+    expect(html).toContain('模型响应超时（秒）')
+    expect(html).toContain('value="120"')
+    expect(html).toContain('默认 120 秒')
   })
 })

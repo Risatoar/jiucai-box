@@ -8,8 +8,10 @@ import './styles/onboarding.css'
 import './styles/strategy.css'
 import './styles/kline.css'
 import './styles/stock-strategy-card.css'
+import './styles/signal-handling.css'
 import './styles/message-modules.css'
 import './styles/position-strategy.css'
 import './styles/voc.css'
+import './styles/automation-onboarding.css'
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)

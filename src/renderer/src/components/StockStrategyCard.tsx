@@ -2,6 +2,7 @@ import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, Clock3, Landmark, Shield
 import { useState } from 'react'
 import type { StockStrategyCardData, StockStrategyPoint } from '../../../shared/types'
 import { buildMessagePresentation, type MessageEntityGroup } from '../utils/message-presentation'
+import { handlingLabel, signalTradeSide } from '../utils/signal-handling'
 import { StockStrategyMarket } from './StockStrategyMarket'
 
 const typeLabel = (card: StockStrategyCardData) => card.instrumentType === 'cbond' ? '债' : card.instrumentType === 'stock' ? '股' : 'E'
@@ -35,25 +36,31 @@ function AccountOverview({ group }: { group?: MessageEntityGroup }) {
   </div>
 }
 
-function ActionSignalCard({ card, onOpen }: { card: StockStrategyCardData; onOpen: () => void }) {
+function ActionSignalCard({ card, onOpen, onHandle }: { card: StockStrategyCardData; onOpen: () => void; onHandle?: () => void }) {
   const signal = signalMeta(card)
   if (signal.strength === 'watch') return null
   const buy = signal.tone === 'buy'
   const Icon = buy ? TrendingUp : TrendingDown
   const point = (buy ? card.buyPoints : card.sellPoints)[0]
-  return <button className={`stock-signal-highlight ${signal.tone} ${signal.strength}`} onClick={onOpen} type="button" aria-label={`${signal.label}信号：${card.name}，点击查看详情`}>
-    <span className="stock-signal-icon"><Icon size={17} /></span>
-    <span className="stock-signal-main">
-      <span className="stock-signal-title"><em>{signal.label}</em><strong>{card.name}</strong><small>{card.code}{sourceLabel(card) ? ` · ${sourceLabel(card)}` : ''}</small></span>
-      <span className="stock-signal-summary">{card.summary}</span>
-      {point && <span className="stock-signal-condition"><b>{point.label}{point.price ? ` · ${point.price}` : ''}</b>{point.condition}</span>}
-    </span>
+  const handled = card.handling ? handlingLabel(card.handling.status, signalTradeSide(card)) : ''
+  return <div className={`stock-signal-highlight ${signal.tone} ${signal.strength}`}>
+    <button className="stock-signal-open" onClick={onOpen} type="button" aria-label={`${signal.label}信号：${card.name}，点击查看详情`}>
+      <span className="stock-signal-icon"><Icon size={17} /></span>
+      <span className="stock-signal-main">
+        <span className="stock-signal-title"><em>{signal.label}</em><strong>{card.name}</strong><small>{card.code}{sourceLabel(card) ? ` · ${sourceLabel(card)}` : ''}</small></span>
+        <span className="stock-signal-summary">{card.summary}</span>
+        {point && <span className="stock-signal-condition"><b>{point.label}{point.price ? ` · ${point.price}` : ''}</b>{point.condition}</span>}
+      </span>
+    </button>
     <span className="stock-signal-side">
       {card.currentPrice && <strong>{card.currentPrice}</strong>}
       {card.changePercent && <small>{card.changePercent}</small>}
-      <span>查看详情 <ChevronDown size={12} /></span>
+      <button onClick={onOpen} type="button">查看详情 <ChevronDown size={12} /></button>
+      {onHandle && (card.handling?.status === 'executed'
+        ? <em className="stock-signal-handled">{handled}</em>
+        : <button className={card.handling ? 'stock-signal-handle handled' : 'stock-signal-handle'} onClick={onHandle} type="button">{handled || '登记处理'}</button>)}
     </span>
-  </button>
+  </div>
 }
 
 function PointList({ title, points, side }: { title: string; points: StockStrategyPoint[]; side: 'buy' | 'sell' }) {
@@ -89,11 +96,10 @@ function StockStrategyDetails({ card, onClose }: { card: StockStrategyCardData; 
   </section>
 }
 
-export function StockStrategyTags({ cards, content = '', defaultExpanded = true }: { cards: StockStrategyCardData[]; content?: string; defaultExpanded?: boolean }) {
+export function StockStrategyTags({ cards, content = '', onHandleSignal }: { cards: StockStrategyCardData[]; content?: string; onHandleSignal?: (card: StockStrategyCardData) => void }) {
   const orderedCards = [...cards].sort((left, right) => signalMeta(right).priority - signalMeta(left).priority)
-  const defaultCard = defaultExpanded ? orderedCards.find((card) => signalMeta(card).strength !== 'watch') || (orderedCards.length === 1 ? orderedCards[0] : undefined) : undefined
-  const [pushExpanded, setPushExpanded] = useState(defaultExpanded)
-  const [expandedKey, setExpandedKey] = useState<string | null>(defaultCard ? cardKey(defaultCard) : null)
+  const [pushExpanded, setPushExpanded] = useState(true)
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const expandedCard = orderedCards.find((card) => cardKey(card) === expandedKey)
   if (!cards.length) return null
   const groupedCards = Array.from(orderedCards.reduce((groups, card) => {
@@ -133,7 +139,7 @@ export function StockStrategyTags({ cards, content = '', defaultExpanded = true 
         <div className="stock-strategy-group-body">
           {account && <AccountOverview group={accountGroups.get(scope)} />}
           {actionCards.length > 0 && <div className="stock-signal-highlights" aria-label="买卖信号等级">
-            {actionCards.map((card) => <ActionSignalCard card={card} key={`signal-${cardKey(card)}`} onOpen={() => setExpandedKey(cardKey(card))} />)}
+            {actionCards.map((card) => <ActionSignalCard card={card} key={`signal-${cardKey(card)}`} onHandle={onHandleSignal ? () => onHandleSignal(card) : undefined} onOpen={() => setExpandedKey(cardKey(card))} />)}
           </div>}
           {normalCards.length > 0 && <div className="stock-tag-list">
             {normalCards.map((card) => {

@@ -1,6 +1,7 @@
 import { BellRing, Bot, Brain, Check, ChevronRight, Database, Download, ExternalLink, KeyRound, MessageCircle, Monitor, RefreshCw, Save, Search, Send, ShieldCheck, UserRound, UsersRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { AiConfig, AppUpdateStatus, DesktopIntegrationStatus, FeishuChat, FeishuChatSearchResult, FeishuConfigInput, FeishuConnectionResult, FeishuConversationStatus, UserProfile } from '../../../shared/types'
+import { DEFAULT_AI_TIMEOUT_SECONDS, MAX_AI_TIMEOUT_SECONDS, MIN_AI_TIMEOUT_SECONDS, normalizeAiTimeoutSeconds } from '../../../shared/ai-config'
 import { ProfileSettingsPanel } from './ProfileSettingsPanel'
 import { MemorySettingsPanel } from './MemorySettingsPanel'
 import { FeishuConversationPanel } from './FeishuConversationPanel'
@@ -67,7 +68,9 @@ export function SettingsView(props: SettingsViewProps) {
   const [disciplineBusy, setDisciplineBusy] = useState(false)
   const save = async () => {
     setMessage('')
-    try { await props.onAiConfig(draft); setSaved(true); window.setTimeout(() => setSaved(false), 1500) }
+    const normalized = { ...draft, timeoutSeconds: normalizeAiTimeoutSeconds(draft.timeoutSeconds) }
+    setDraft(normalized)
+    try { await props.onAiConfig(normalized); setSaved(true); window.setTimeout(() => setSaved(false), 1500) }
     catch (reason) { setMessage(reason instanceof Error ? reason.message : String(reason)) }
   }
   const runDoctor = async () => {
@@ -181,7 +184,28 @@ export function SettingsView(props: SettingsViewProps) {
       <div className="settings-content">
         {tab === 'profile' && <ProfileSettingsPanel profile={props.userProfile} onSave={props.onUserProfile} />}
         {tab === 'memory' && <MemorySettingsPanel />}
-        {tab === 'ai' && <div className="setting-section"><div className="setting-title"><Bot size={16} /><div><strong>AI 连接方式</strong><span>大多数人使用默认设置即可。只有熟悉 AI 配置时才需要修改。</span></div></div><div className="provider-options">{[{ id: 'codex-local', title: '使用本机 AI', desc: '使用这台电脑上已经登录的 Codex' }, { id: 'openai-compatible', title: '连接其他 AI 服务', desc: '适合已经有 API 地址和密钥的用户' }].map((provider) => <button key={provider.id} className={draft.provider === provider.id ? 'provider-card selected' : 'provider-card'} onClick={() => setDraft({ ...draft, provider: provider.id as AiConfig['provider'] })} type="button"><span className="radio-dot" /><div><strong>{provider.title}</strong><small>{provider.desc}</small></div></button>)}</div>{draft.provider === 'codex-local' ? <div className="form-grid"><label className="full"><span>Codex 程序位置（一般不用填）</span><input placeholder="留空即可自动查找" value={draft.codexPath || ''} onChange={(event) => setDraft({ ...draft, codexPath: event.target.value || undefined })} /></label></div> : <div className="form-grid"><label><span>服务地址（Base URL）</span><input value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} /></label><label><span>模型名称</span><input value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} /></label><label className="full"><span>访问密钥（API Key）</span><div className="input-with-icon"><KeyRound size={14} /><input type="password" value={draft.apiKey || ''} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} /></div></label></div>}</div>}
+        {tab === 'ai' && <div className="setting-section">
+          <div className="setting-title"><Bot size={16} /><div><strong>AI 连接方式</strong><span>大多数人使用默认设置即可。只有熟悉 AI 配置时才需要修改。</span></div></div>
+          <div className="provider-options">{[{ id: 'codex-local', title: '使用本机 AI', desc: '使用这台电脑上已经登录的 Codex' }, { id: 'openai-compatible', title: '连接其他 AI 服务', desc: '适合已经有 API 地址和密钥的用户' }].map((provider) => <button key={provider.id} className={draft.provider === provider.id ? 'provider-card selected' : 'provider-card'} onClick={() => setDraft({ ...draft, provider: provider.id as AiConfig['provider'] })} type="button"><span className="radio-dot" /><div><strong>{provider.title}</strong><small>{provider.desc}</small></div></button>)}</div>
+          {draft.provider === 'codex-local'
+            ? <div className="form-grid"><label className="full"><span>Codex 程序位置（一般不用填）</span><input placeholder="留空即可自动查找" value={draft.codexPath || ''} onChange={(event) => setDraft({ ...draft, codexPath: event.target.value || undefined })} /></label></div>
+            : <div className="form-grid"><label><span>服务地址（Base URL）</span><input value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} /></label><label><span>模型名称</span><input value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} /></label><label className="full"><span>访问密钥（API Key）</span><div className="input-with-icon"><KeyRound size={14} /><input type="password" value={draft.apiKey || ''} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} /></div></label></div>}
+          <div className="form-grid ai-timeout-settings">
+            <label>
+              <span>模型响应超时（秒）</span>
+              <input
+                aria-describedby="ai-timeout-help"
+                max={MAX_AI_TIMEOUT_SECONDS}
+                min={MIN_AI_TIMEOUT_SECONDS}
+                step={10}
+                type="number"
+                value={draft.timeoutSeconds ?? DEFAULT_AI_TIMEOUT_SECONDS}
+                onChange={(event) => setDraft({ ...draft, timeoutSeconds: Number.isFinite(event.currentTarget.valueAsNumber) ? event.currentTarget.valueAsNumber : undefined })}
+              />
+            </label>
+            <small id="ai-timeout-help">超过该时间会停止本次 AI 任务。可设置 {MIN_AI_TIMEOUT_SECONDS}–{MAX_AI_TIMEOUT_SECONDS} 秒，默认 {DEFAULT_AI_TIMEOUT_SECONDS} 秒。</small>
+          </div>
+        </div>}
         {tab === 'data' && <div className="setting-section"><div className="setting-title"><Database size={16} /><div><strong>我的交易数据</strong><span>持仓、关注和交易规则都保存在这台电脑上。</span></div></div><div className="path-field"><code>{props.tradeMasterHome || '~/.trade-master'}</code><button onClick={() => props.tradeMasterHome && window.desktopApi?.openPath(props.tradeMasterHome)} type="button"><ExternalLink size={14} /></button></div><div className="connection-row"><span className={props.factConnected ? 'status-dot ok' : 'status-dot'} /><div><strong>{props.factConnected ? '已读取' : '未连接'}</strong><small>{doctorState}</small></div><button className="secondary-button" onClick={() => void runDoctor()} type="button">检查数据</button></div><div className="connection-row discipline-setting-row"><span className={`status-dot ${props.discipline === 'NORMAL' ? 'ok' : 'warning'}`} /><div><strong>交易状态 · {props.discipline === 'NORMAL' ? '正常' : props.discipline === 'CAUTION' ? '警戒' : props.discipline === 'COOLDOWN' ? '冷静期' : props.discipline === 'STOPPED' ? '已停手' : props.discipline}</strong><small>{props.discipline === 'NORMAL' ? '继续执行现有风险和策略闸门' : '复核账户信息后可由你明确恢复，历史记录会保留'}</small></div>{props.discipline !== 'NORMAL' && <button className="secondary-button" disabled={disciplineBusy} onClick={() => void confirmNormal()} type="button">{disciplineBusy ? '更新中…' : '复核后恢复正常'}</button>}</div></div>}
         {tab === 'notify' && <div className="setting-section">
           <div className="setting-title"><BellRing size={16} /><div><strong>飞书提醒</strong><span>有买卖机会、风险或任务故障时发送提醒。收到提醒不代表已经成交。</span></div></div>

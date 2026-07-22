@@ -210,7 +210,7 @@ export const generatePositionStrategy = async (config: AiConfig, snapshot: Trade
   if (!request.force && cacheMatches && Date.parse(cached.analysis.expiresAt) > Date.now()) return { analysis: cached.analysis, cached: true, stale: false }
   try {
     const evidence = await loadMarketEvidence(request.code)
-    const content = await sendAiMessage(config, [{ role: 'user', content: strategyPrompt(snapshot, target, evidence) }], { purpose: 'automation', timeoutMs: 90_000, workingDirectory: snapshot.home })
+    const content = await sendAiMessage(config, [{ role: 'user', content: strategyPrompt(snapshot, target, evidence) }], { purpose: 'automation', workingDirectory: snapshot.home })
     const dataAsOf = evidence.quote.exchangeTime || evidence.quote.collectedAt || new Date().toISOString()
     const analysis = parsePositionStrategy(content, target, evidence.quote.price, dataAsOf)
     analysis.missingFacts = [...new Set([...analysis.missingFacts, ...evidence.missingSources])].slice(0, 10)

@@ -69,6 +69,7 @@ export interface DesktopApi {
   restartToUpdate: () => Promise<boolean>
   onUpdateStatus: (listener: (status: AppUpdateStatus) => void) => () => void
   createStrategyCandidate: (config: AiConfig, prompt: string) => Promise<{ ok: boolean; file?: string; candidate?: unknown; error?: string }>
+  importStrategyCandidate: (raw: string) => Promise<{ ok: boolean; file?: string; candidate?: unknown; error?: string }>
   notify: (title: string, body: string) => Promise<boolean>
   openPath: (path: string) => Promise<string>
   openExternal: (url: string) => Promise<boolean>

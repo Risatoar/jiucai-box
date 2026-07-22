@@ -7,7 +7,7 @@ import { buildCodexExecArgs, sendAiMessage, summarizeProcessError } from './ai-p
 
 const previousHome = process.env.TRADE_MASTER_HOME
 const previousFetch = globalThis.fetch
-afterEach(() => { if (previousHome == null) delete process.env.TRADE_MASTER_HOME; else process.env.TRADE_MASTER_HOME = previousHome; globalThis.fetch = previousFetch; vi.restoreAllMocks() })
+afterEach(() => { if (previousHome == null) delete process.env.TRADE_MASTER_HOME; else process.env.TRADE_MASTER_HOME = previousHome; globalThis.fetch = previousFetch; vi.useRealTimers(); vi.restoreAllMocks() })
 
 describe('sendAiMessage attachments', () => {
   it('uses Responses multimodal input when a message contains a file', async () => {
@@ -68,6 +68,20 @@ describe('sendAiMessage attachments', () => {
     )
     controller.abort()
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('stops an API request at the configured model timeout', async () => {
+    vi.useFakeTimers()
+    globalThis.fetch = vi.fn(async (_url, init) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+    })) as typeof fetch
+    const pending = sendAiMessage(
+      { provider: 'openai-compatible', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5', apiKey: 'test', timeoutSeconds: 30 },
+      [{ role: 'user', content: '测试模型超时' }]
+    )
+    const rejection = expect(pending).rejects.toThrow('AI 执行超过 30 秒')
+    await vi.advanceTimersByTimeAsync(30_000)
+    await rejection
   })
 
   it('enables Codex JSONL output for interactive streaming', () => {

@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ClipboardEvent, DragEvent } from 'react'
 import { AlertCircle, ArrowUp, Brain, ChevronDown, MessageSquare, Paperclip, ShieldCheck, Sparkles, Square, Zap } from 'lucide-react'
-import type { AiConfig, ChatAttachment, ChatMessage, ChatSession, Instrument, MemorySettings } from '../../../shared/types'
+import type { AiConfig, AiMessageInput, ChatAttachment, ChatMessage, ChatSession, HouseholdSnapshot, Instrument, MemorySettings, StockStrategyCardData, TradeRecordInput } from '../../../shared/types'
 import type { ChatRunState } from '../utils/chat-run'
 import { clearChatDraft, loadChatDraft, saveChatDraft } from '../utils/chat-draft'
 import { automationQuickActions, chatQuickActions, emptyStateSuggestions } from '../utils/chat-prompts'
+import { buildChatRetryContext } from '../utils/chat-retry'
 import { parseStockStrategyCards, stripStockStrategyPayload } from '../utils/stock-strategy-card'
 import { parseConfirmedTrade } from '../utils/trade-proposal'
 import { AttachmentStrip } from './AttachmentStrip'
 import { buildConversationTurns, ConversationHistoryRail } from './ConversationHistoryRail'
 import { RichMessageContent } from './RichMessageContent'
+import { SignalHandlingDialog, type SignalHandlingInput } from './SignalHandlingDialog'
 import { StockStrategyTags } from './StockStrategyCard'
 
 interface ChatWorkspaceProps {
@@ -20,13 +22,16 @@ interface ChatWorkspaceProps {
   onSessionUpdated: () => Promise<void>
   onRunStart: (sessionId: string) => void
   onRunFinish: (sessionId: string) => void
+  onRetryAutomation: (sessionId: string) => Promise<{ ok: boolean; error?: string }>
   onOpenSettings: () => void
   factConnected: boolean
   onFactsUpdated: () => Promise<void>
+  household: HouseholdSnapshot
+  onRecordTrade: (accountId: string, trade: TradeRecordInput) => Promise<{ ok: boolean; error?: string }>
 }
 
 const nowLabel = () => new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSessionUpdated, onRunStart, onRunFinish, onOpenSettings, factConnected, onFactsUpdated }: ChatWorkspaceProps) {
+export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSessionUpdated, onRunStart, onRunFinish, onRetryAutomation, onOpenSettings, factConnected, onFactsUpdated, household, onRecordTrade }: ChatWorkspaceProps) {
   const [session, setSession] = useState<ChatSession | null>(null)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -34,9 +39,11 @@ export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSe
   const [attaching, setAttaching] = useState(false)
   const [attachmentError, setAttachmentError] = useState('')
   const [stopping, setStopping] = useState(false)
+  const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null)
   const [streamSeconds, setStreamSeconds] = useState(0)
   const [globalMemory, setGlobalMemory] = useState<MemorySettings>({ useMemories: true, generateMemories: true })
   const [activeTurnId, setActiveTurnId] = useState<string | null>(null)
+  const [signalTarget, setSignalTarget] = useState<{ messageId: string; card: StockStrategyCardData } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const messageRefs = useRef(new Map<string, HTMLElement>())
   const sessionIdRef = useRef(sessionId)
@@ -174,6 +181,28 @@ export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSe
     await persist({ ...session, memories: { ...current, [key]: !current[key] } })
   }
 
+  const completeChatRequest = async (targetSessionId: string, requestMessages: AiMessageInput[], latestQuestion: string) => {
+    const result = await window.desktopApi!.chat(aiConfig, targetSessionId, requestMessages)
+    let completed = await window.desktopApi!.loadChatSession(targetSessionId)
+    const presentation = result.ok ? parseStockStrategyCards(result.content) : null
+    const proposal = result.ok ? parseConfirmedTrade(latestQuestion) : null
+    if (result.messageId && (presentation || proposal)) {
+      completed = { ...completed, messages: completed.messages.map((message) => message.id === result.messageId ? {
+        ...message, content: presentation?.content || message.content,
+        stockStrategyCards: presentation?.cards.length ? presentation.cards : undefined,
+        tradeProposal: proposal ? { ...proposal, state: 'pending' as const } : undefined
+      } : message) }
+      completed = await persist(completed)
+    } else {
+      if (sessionIdRef.current === completed.id) setSession(completed)
+      await onSessionUpdated()
+    }
+    if (result.ok && typeof window.desktopApi!.extractMemories === 'function' && completed.memories?.generateMemories !== false) {
+      const memoryMessages = completed.messages.map(({ role, content }) => ({ role, content }))
+      void window.desktopApi!.extractMemories(aiConfig, targetSessionId, memoryMessages)
+    }
+  }
+
   const send = async (preset?: string) => {
     const content = (preset ?? input).trim() || '请分析附件内容。'
     if (!content || sending || !session || locallyRunningIdsRef.current.has(session.id)) return
@@ -195,33 +224,7 @@ export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSe
       await persist({ ...savedWithUser, messages: [...savedWithUser.messages, assistant], messageCount: savedWithUser.messages.length + 1 })
     } else {
       try {
-        const result = await window.desktopApi.chat(
-          aiConfig,
-          targetSessionId,
-          savedWithUser.messages.map(({ role, content: messageContent, attachments: messageAttachments }) => ({ role, content: messageContent, attachments: messageAttachments }))
-        )
-        let completed = await window.desktopApi.loadChatSession(targetSessionId)
-        const presentation = result.ok ? parseStockStrategyCards(result.content) : null
-        const proposal = result.ok ? parseConfirmedTrade(content) : null
-        if (result.messageId && (presentation || proposal)) {
-          completed = {
-            ...completed,
-            messages: completed.messages.map((message) => message.id === result.messageId ? {
-              ...message,
-              content: presentation?.content || message.content,
-              stockStrategyCards: presentation?.cards.length ? presentation.cards : undefined,
-              tradeProposal: proposal ? { ...proposal, state: 'pending' as const } : undefined
-            } : message)
-          }
-          completed = await persist(completed)
-        } else {
-          if (sessionIdRef.current === completed.id) setSession(completed)
-          await onSessionUpdated()
-        }
-        if (result.ok && typeof window.desktopApi.extractMemories === 'function' && completed.memories?.generateMemories !== false) {
-          const memoryMessages = completed.messages.map(({ role, content: messageContent }) => ({ role, content: messageContent }))
-          void window.desktopApi.extractMemories(aiConfig, targetSessionId, memoryMessages)
-        }
+        await completeChatRequest(targetSessionId, savedWithUser.messages.map(({ role, content: messageContent, attachments: messageAttachments }) => ({ role, content: messageContent, attachments: messageAttachments })), content)
       } catch (error) {
         setAttachmentError(`AI 执行异常：${error instanceof Error ? error.message : String(error)}`)
         const loaded = await window.desktopApi.loadChatSession(targetSessionId).catch(() => null)
@@ -230,6 +233,33 @@ export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSe
     }
     locallyRunningIdsRef.current.delete(targetSessionId)
     onRunFinish(targetSessionId)
+  }
+
+  const retryMessage = async (message: ChatMessage) => {
+    if (!session || message.status !== 'error' || retryingMessageId || sending || automationRunning) return
+    const targetSessionId = session.id
+    setAttachmentError(''); setRetryingMessageId(message.id)
+    if (isAutomationSession) {
+      try {
+        const result = await onRetryAutomation(targetSessionId)
+        if (!result.ok) setAttachmentError(`重试失败：${result.error || '定时任务仍未成功'}`)
+        const loaded = await window.desktopApi?.loadChatSession(targetSessionId)
+        if (loaded && sessionIdRef.current === loaded.id) setSession(loaded)
+      } catch (error) { setAttachmentError(`重试失败：${error instanceof Error ? error.message : String(error)}`) }
+      finally { setRetryingMessageId(null) }
+      return
+    }
+    const retry = buildChatRetryContext(session.messages, message.id)
+    if (!retry || !window.desktopApi) { setAttachmentError('找不到这次失败对应的原请求，无法重试。'); setRetryingMessageId(null); return }
+    locallyRunningIdsRef.current.add(targetSessionId); onRunStart(targetSessionId)
+    try { await completeChatRequest(targetSessionId, retry.messages, retry.latestQuestion) }
+    catch (error) {
+      setAttachmentError(`重试异常：${error instanceof Error ? error.message : String(error)}`)
+      const loaded = await window.desktopApi.loadChatSession(targetSessionId).catch(() => null)
+      if (loaded && sessionIdRef.current === loaded.id) setSession(loaded)
+    } finally {
+      locallyRunningIdsRef.current.delete(targetSessionId); onRunFinish(targetSessionId); setRetryingMessageId(null)
+    }
   }
 
   const stop = async () => {
@@ -311,6 +341,28 @@ export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSe
     await persist(next)
   }
 
+  const saveSignalHandling = async (input: SignalHandlingInput) => {
+    if (!session || !signalTarget) return { ok: false, error: '当前信号已经更新，请重新打开' }
+    const current = window.desktopApi ? await window.desktopApi.loadChatSession(session.id).catch(() => session) : session
+    const message = current.messages.find((item) => item.id === signalTarget.messageId)
+    if (!message) return { ok: false, error: '该信号已不在当前会话中' }
+    const cards = message.stockStrategyCards?.length ? message.stockStrategyCards : parseStockStrategyCards(message.content, instruments, isAutomationSession ? 8 : 3).cards
+    const match = (card: StockStrategyCardData) => card.code === signalTarget.card.code && card.accountScope === signalTarget.card.accountScope
+    if (!cards.some(match)) return { ok: false, error: '未找到对应信号，请重新打开' }
+    if (input.status === 'executed') {
+      if (!input.accountId || !input.trade) return { ok: false, error: '请补全成交信息' }
+      const recorded = await onRecordTrade(input.accountId, input.trade)
+      if (!recorded.ok) return recorded
+    }
+    const handling = { status: input.status, handledAt: new Date().toISOString(), accountId: input.accountId, trade: input.trade }
+    const next = { ...current, messages: current.messages.map((item) => item.id === message.id ? { ...item, stockStrategyCards: cards.map((card) => match(card) ? { ...card, handling } : card) } : item) }
+    try { await persist(next); return { ok: true } }
+    catch (error) {
+      if (input.status === 'executed') setSession(next)
+      return { ok: false, tradeRecorded: input.status === 'executed', error: input.status === 'executed' ? '成交已写入账户，但信号状态保存失败，请不要重复登记。' : `处理结果保存失败：${error instanceof Error ? error.message : String(error)}` }
+    }
+  }
+
   const messages = session?.messages || []
   const turns = useMemo(() => buildConversationTurns(messages), [messages])
   const turnAnchorIds = useMemo(() => new Set(turns.map((turn) => turn.targetMessageId)), [turns])
@@ -375,15 +427,17 @@ export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSe
             {message.role === 'assistant' && <div className="assistant-avatar">韭</div>}
             <div className="message-body">
               <div className="message-meta">{message.role === 'user' ? '你' : '韭菜盒子'}<span>{message.timestamp}</span>{message.status === 'error' && <em><AlertCircle size={11} />{sessionId?.startsWith('automation-') ? '执行失败' : '未发送成功'}</em>}</div>
-              {message.role === 'assistant' && <StockStrategyTags cards={cards} content={presentation.content} defaultExpanded={!isAutomationSession} />}
+              {message.role === 'assistant' && <StockStrategyTags cards={cards} content={presentation.content} onHandleSignal={(card) => setSignalTarget({ messageId: message.id, card })} />}
               {message.role === 'assistant'
                 ? <RichMessageContent
                     content={presentation.content}
                     status={message.status}
                     coveredInstruments={cards.map((card) => card.code)}
                     coveredAccounts={cards.flatMap((card) => card.accountScope ? [card.accountScope] : [])}
-                    disabled={sending || attaching || automationRunning}
+                    disabled={sending || attaching || automationRunning || Boolean(retryingMessageId)}
+                    retrying={retryingMessageId === message.id}
                     onFollowUp={(prompt) => void send(prompt)}
+                    onRetry={message.status === 'error' ? () => void retryMessage(message) : undefined}
                     onOpenLink={(url) => void window.desktopApi?.openExternal(url)}
                   />
                 : <div className="message-content">{presentation.content}</div>}
@@ -433,6 +487,7 @@ export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSe
         {attachmentError && <p className="attachment-error"><AlertCircle size={11} />{attachmentError}</p>}
         <p className="composer-hint">AI 只帮你分析，不会替你下单，也不能保证赚钱。</p>
       </div>
+      {signalTarget && <SignalHandlingDialog card={signalTarget.card} household={household} onClose={() => setSignalTarget(null)} onSave={saveSignalHandling} />}
     </section>
   )
 }

@@ -97,6 +97,7 @@ const api: DesktopApi = {
     return () => ipcRenderer.removeListener('updates:status-changed', handler)
   },
   createStrategyCandidate: (config, prompt) => ipcRenderer.invoke('strategy:create-candidate', config, prompt),
+  importStrategyCandidate: (raw) => ipcRenderer.invoke('strategy:import-candidate', raw),
   notify: (title, body) => ipcRenderer.invoke('system:notify', title, body),
   openPath: (path) => ipcRenderer.invoke('system:open-path', path),
   openExternal: (url) => ipcRenderer.invoke('system:open-external', url),

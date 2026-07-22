@@ -1,4 +1,4 @@
-import { Check, ChevronDown, CircleCheck, CircleDashed, CircleX, Clipboard, Info, Landmark, ListChecks, ShieldAlert, Sparkles } from 'lucide-react'
+import { Check, ChevronDown, CircleCheck, CircleDashed, CircleX, Clipboard, Info, Landmark, ListChecks, RotateCcw, ShieldAlert, Sparkles } from 'lucide-react'
 import { Fragment, useState } from 'react'
 import type { ChatMessage } from '../../../shared/types'
 import { buildMessagePresentation, type MessageEntityGroup, type MessageResultState, type MessageSection } from '../utils/message-presentation'
@@ -9,7 +9,9 @@ interface RichMessageContentProps {
   coveredInstruments?: string[]
   coveredAccounts?: string[]
   disabled?: boolean
+  retrying?: boolean
   onFollowUp?: (prompt: string) => void
+  onRetry?: () => void
   onOpenLink?: (url: string) => void
 }
 
@@ -89,7 +91,7 @@ const followUps = (state?: MessageResultState) => state === 'error'
         { label: '复核风险', icon: ShieldAlert, prompt: '请复核上一条回答中的风险、证据不足和可能误判。' }
       ]
 
-export function RichMessageContent({ content, status, coveredInstruments = [], coveredAccounts = [], disabled, onFollowUp, onOpenLink }: RichMessageContentProps) {
+export function RichMessageContent({ content, status, coveredInstruments = [], coveredAccounts = [], disabled, retrying, onFollowUp, onRetry, onOpenLink }: RichMessageContentProps) {
   const [copied, setCopied] = useState(false)
   const [showRaw, setShowRaw] = useState(false)
   const presentation = buildMessagePresentation(content, status)
@@ -129,6 +131,7 @@ export function RichMessageContent({ content, status, coveredInstruments = [], c
     </div>}
     {showRaw && <pre className="message-raw-content">{content}</pre>}
     <div className="message-interactions" aria-label="消息操作">
+      {presentation.result?.state === 'error' && onRetry && <button className="message-retry-action" disabled={disabled || retrying} onClick={onRetry} title="重新执行原请求" type="button"><RotateCcw className={retrying ? 'spinning' : ''} size={13} />{retrying ? '正在重试' : '重试'}</button>}
       <button onClick={() => void copy()} title="复制完整回答" type="button">{copied ? <Check size={12} /> : <Clipboard size={12} />}{copied ? '已复制' : '复制'}</button>
       {presentation.structured && <button onClick={() => setShowRaw((value) => !value)} title="查看未经模块化的原始回答" type="button"><ChevronDown className={showRaw ? 'open' : ''} size={12} />{showRaw ? '收起原文' : '查看原文'}</button>}
       {onFollowUp && followUps(presentation.result?.state).map((action) => {

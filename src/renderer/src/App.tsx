@@ -4,6 +4,7 @@ import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 import type { AiConfig, AppView, ChartPeriod, ChatSessionSummary, FeishuConnectionResult, HouseholdAccount, HouseholdAccountInput, HouseholdMember, HouseholdMemberInput, MarketBar, SetupProgress, TradeMasterSnapshot, TradeRecordInput, UserProfile, WatchItem } from '../../shared/types'
 import { automationSessionId } from '../../shared/automation'
 import { AutomationsView } from './components/AutomationsView'
+import { AutomationOnboardingDialog } from './components/AutomationOnboardingDialog'
 import { ChatWorkspace } from './components/ChatWorkspace'
 import { ContextPanel } from './components/ContextPanel'
 import { Onboarding } from './components/Onboarding'
@@ -16,13 +17,14 @@ import { SetupView } from './components/SetupView'
 import { Topbar } from './components/Topbar'
 import { WatchlistView } from './components/WatchlistView'
 import { VocMonitorView } from './components/VocMonitorView'
+import { useAutomationOnboarding } from './hooks/useAutomationOnboarding'
 import { aggregate120MinuteBars } from './components/kline-chart-utils'
 import { finishChatRun, hydrateChatRuns, setChatRun, startChatRun, type ChatRunMap } from './utils/chat-run'
 import { assetFromSnapshot, automationsFromSnapshot, disciplineFromSnapshot, feishuConfigFromSnapshot, gatesFromSnapshot, householdFromSnapshot, notificationEventsFromSnapshot, positionsFromSnapshot, strategiesFromSnapshot, watchlistFromSnapshot } from './utils/snapshot'
 import { shouldLoadMarketBars } from './utils/market-data'
 import { clampPaneWidth, defaultPaneWidth, paneWidthFromPointer, PANE_LIMITS, type PaneSide } from './utils/pane-layout'
-
-const initialAiConfig: AiConfig = { provider: 'codex-local', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5' }
+import { DEFAULT_AI_TIMEOUT_SECONDS } from '../../shared/ai-config'
+const initialAiConfig: AiConfig = { provider: 'codex-local', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5', timeoutSeconds: DEFAULT_AI_TIMEOUT_SECONDS }
 const fallbackProfile: UserProfile = { capital: 0, styles: ['波段'], experience: '1年以内', maxDrawdown: 8, targetReturn: 20, targetMonths: 12, instruments: ['stock'], tradingHabits: ['只看关键提醒'] }
 const initialSetup: SetupProgress = { stage: 'checking', percent: 4, title: '正在准备韭菜盒子', detail: '检查核心组件与本地数据目录' }
 const loadPaneWidths = () => {
@@ -43,7 +45,6 @@ const loadUnreadSessionIds = () => {
   } catch { /* ignore invalid local state */ }
   return new Set<string>()
 }
-
 export default function App() {
   const skipOnboarding = new URLSearchParams(location.search).has('skipOnboarding')
   const [onboarded, setOnboarded] = useState(skipOnboarding)
@@ -75,7 +76,6 @@ export default function App() {
   const activeSessionIdRef = useRef(activeSessionId)
   viewRef.current = view
   activeSessionIdRef.current = activeSessionId
-
   const refresh = useCallback(async () => {
     setRefreshing(true)
     if (window.desktopApi) {
@@ -95,7 +95,7 @@ export default function App() {
     }
     window.setTimeout(() => setRefreshing(false), 450)
   }, [])
-
+  const automationOnboarding = useAutomationOnboarding({ installStatus: (snapshot?.automation as { install_status?: string } | null)?.install_status, onInstall: () => window.desktopApi?.installAutomations() ?? Promise.resolve({ ok: false, error: '桌面功能没有正常启动' }), onInstalled: refresh })
   const prepare = useCallback(async () => {
     if (skipOnboarding) return
     if (!window.desktopApi) {
@@ -288,7 +288,6 @@ export default function App() {
     const candidate = selected ? watchlist.find((item) => item.code === selected.code) : null
     setSelected(candidate || watchlist[0])
   }, [watchlist, selected?.code])
-
   const positions = useMemo(() => positionsFromSnapshot(snapshot).map((position) => {
     const quote = watchlist.find((item) => item.code === position.instrument.code)
     if (!quote?.latestPrice) return position
@@ -351,6 +350,7 @@ export default function App() {
       await window.desktopApi.saveUserProfile(profile)
       await refresh()
     }
+    automationOnboarding.request()
     setOnboarded(true)
   }
   const updateUserProfile = async (profile: UserProfile) => {
@@ -429,11 +429,15 @@ export default function App() {
     await Promise.all([refresh(), refreshSessions()])
     return result
   }
+  const retryAutomation = async (sessionId: string) => {
+    const task = automations.find((item) => automationSessionId(item.id) === sessionId)
+    if (!task) return { ok: false, error: '找不到这条失败消息对应的定时任务' }
+    return runAutomation(task.id)
+  }
   const refreshAfterFeishuConnection = async (result: FeishuConnectionResult) => {
     if (result.ok && result.status === 'connected') await refresh()
     return result
   }
-
   const oppositePaneWidth = (side: PaneSide, current: typeof paneWidths) => {
     if (side === 'left') return view === 'settings' ? 0 : rightCollapsed ? 42 : current.right
     return leftCollapsed ? 52 : current.left
@@ -456,17 +460,16 @@ export default function App() {
       [side]: clampPaneWidth(side, defaultPaneWidth(side, window.innerWidth), window.innerWidth, oppositePaneWidth(side, current))
     }))
   }
-
   if (!setupReady) return <SetupView progress={setupProgress} onRetry={() => void prepare()} />
   if (!bootstrapped) return <div className="app-loading"><span className="brand-mark">韭</span><strong>正在读取你的交易数据…</strong></div>
   if (!onboarded) return <Onboarding onComplete={completeOnboarding} connectionError={bootstrapError} />
 
   const content = (() => {
-    if (view === 'chat') return <ChatWorkspace aiConfig={aiConfig} sessionId={activeSessionId} runState={activeChatRun} instruments={chatInstruments} onSessionUpdated={refreshSessions} onRunStart={beginChatRun} onRunFinish={endChatRun} onOpenSettings={() => setView('settings')} factConnected={factConnected} onFactsUpdated={refresh} />
+    if (view === 'chat') return <ChatWorkspace aiConfig={aiConfig} sessionId={activeSessionId} runState={activeChatRun} instruments={chatInstruments} onSessionUpdated={refreshSessions} onRunStart={beginChatRun} onRunFinish={endChatRun} onRetryAutomation={retryAutomation} onOpenSettings={() => setView('settings')} factConnected={factConnected} onFactsUpdated={refresh} household={household} onRecordTrade={recordHouseholdTrade} />
     if (view === 'portfolio') return <PortfolioView household={household} positions={positions} totalAsset={totalAsset} onChat={() => setView('chat')} onRecordTrade={recordHouseholdTrade} onCreateMember={createHouseholdMember} onCreateAccount={createHouseholdAccount} onUpdateMember={updateHouseholdMember} onUpdateAccount={updateHouseholdAccount} />
     if (view === 'watchlist') return <WatchlistView items={watchlist} selected={selected} bars={chartBars} period={chartPeriod} chartLoading={chartLoading} chartError={chartError} chartRefreshedAt={chartRefreshedAt} onPeriod={setChartPeriod} onSelect={setSelected} onSearch={searchWatchItems} onAdd={addWatchItem} onRemove={removeWatchItem} onScan={scanWatchlist} />
     if (view === 'voc') return <VocMonitorView snapshot={snapshot?.voc} onUpdateSource={async (id, patch) => { const result = await window.desktopApi!.updateVocSource(id, patch); if (result.ok) await refresh(); return result }} onOpenExternal={(url) => window.desktopApi!.openExternal(url)} onOpenLogin={() => window.desktopApi!.openVocLogin()} />
-    if (view === 'strategies') return <StrategyLabView strategies={strategies} onAskAi={() => setView('chat')} onCreateCandidate={createCandidate} onStatusChange={setStrategyStatus} onRollback={rollbackStrategy} versionCount={Array.isArray(snapshot?.strategyVersions) ? snapshot.strategyVersions.length : 0} />
+    if (view === 'strategies') return <StrategyLabView strategies={strategies} onAskAi={() => setView('chat')} onCreateCandidate={createCandidate} onImportCandidate={async (raw) => { const result = await window.desktopApi!.importStrategyCandidate(raw); if (result.ok) await refresh(); return result }} onStatusChange={setStrategyStatus} onRollback={rollbackStrategy} versionCount={Array.isArray(snapshot?.strategyVersions) ? snapshot.strategyVersions.length : 0} />
     if (view === 'automations') return <AutomationsView tasks={automations} installStatus={(snapshot?.automation as { install_status?: string } | null)?.install_status} onRestoreDefaults={async () => { const result = await window.desktopApi!.restoreDefaultAutomations(); if (result.ok) await refresh(); return result }} onInstall={async () => { const result = await window.desktopApi!.installAutomations(); if (result.ok) await refresh(); return result }} onCreate={async (input) => { const result = await window.desktopApi!.createAutomation(input); if (result.ok) await refresh(); return result }} onUpdate={async (id, input) => { const result = await window.desktopApi!.updateAutomation(id, input); if (result.ok) await refresh(); return result }} onDelete={async (id) => { const result = await window.desktopApi!.deleteAutomation(id); if (result.ok) await refresh(); return result }} onToggle={async (id, enabled) => { const result = await window.desktopApi!.setAutomationEnabled(id, enabled); if (result.ok) await refresh(); return result }} onRun={runAutomation} />
     return <SettingsView userProfile={userProfile} onUserProfile={updateUserProfile} aiConfig={aiConfig} onAiConfig={updateAiConfig} tradeMasterHome={snapshot?.home} factConnected={factConnected} discipline={discipline} onConfirmNormalDiscipline={async () => { const result = await window.desktopApi!.confirmNormalDiscipline(); if (result.ok) await refresh(); return result }} notificationConfigured={notificationConnected} notificationConfig={feishuConfig} onRunDoctor={() => window.desktopApi?.runTradeMaster('doctor')} onConnectFeishu={async () => refreshAfterFeishuConnection(await window.desktopApi!.connectFeishu())} onSearchFeishuChats={(query) => window.desktopApi!.searchFeishuChats(query)} onConfigureFeishuGroup={async (chatId, name) => refreshAfterFeishuConnection(await window.desktopApi!.configureFeishuGroup(chatId, name))} onGetFeishuConversationStatus={() => window.desktopApi!.getFeishuConversationStatus()} onRestartFeishuConversation={() => window.desktopApi!.restartFeishuConversation()} onFeishuConversationStatus={(listener) => window.desktopApi!.onFeishuConversationStatus(listener)} onCompleteFeishuAuthorization={async (authorizationId) => refreshAfterFeishuConnection(await window.desktopApi!.completeFeishuAuthorization(authorizationId))} onOpenFeishuAuthorization={(authorizationId) => window.desktopApi!.openFeishuAuthorization(authorizationId)} onCancelFeishuAuthorization={(authorizationId) => window.desktopApi!.cancelFeishuAuthorization(authorizationId)} onTestFeishu={() => window.desktopApi!.testFeishu()} onDesktopStatus={() => window.desktopApi!.desktopStatus()} onInstallSwiftBar={() => window.desktopApi!.installSwiftBar()} onGetUpdateStatus={() => window.desktopApi!.getUpdateStatus()} onCheckForUpdates={() => window.desktopApi!.checkForUpdates()} onRestartToUpdate={() => window.desktopApi!.restartToUpdate()} onUpdateStatus={(listener) => window.desktopApi!.onUpdateStatus(listener)} onOpenExternal={(url) => window.desktopApi!.openExternal(url)} />
   })()
@@ -491,6 +494,7 @@ export default function App() {
         </div>
       ))}
       {view !== 'settings' && !rightCollapsed && <PaneResizeHandle side="right" value={paneWidths.right} min={PANE_LIMITS.right.min} max={PANE_LIMITS.right.max} onPointerResize={(clientX) => resizePaneFromPointer('right', clientX)} onKeyboardResize={(delta) => resizePaneBy('right', delta)} onReset={() => resetPaneWidth('right')} />}
+      {automationOnboarding.open && <AutomationOnboardingDialog taskCount={automations.length} busy={automationOnboarding.busy} error={automationOnboarding.error} onEnable={() => void automationOnboarding.enable()} onDismiss={automationOnboarding.dismiss} />}
     </div>
   )
 }

@@ -187,7 +187,7 @@ const registerCaptureFixture = () => {
   }
   ipcMain.handle('trade-master:load', () => ({
     home: '/tmp/visual-fixture', userProfile: captureUserProfile, portfolio: null, household, watchlist, goals: captureUserProfile ? {} : null, discipline: { state: 'NORMAL' }, strategyProfile: captureUserProfile ? {} : null, evolution: null,
-    notifications: null, automation: { install_status: 'planned', tasks: [] }, strategies: { rules: [] }, strategyCandidates: [], loadedAt: new Date().toISOString(), errors: []
+    notifications: null, automation: { install_status: 'planned', tasks: [{ id: 'intraday', mode: 'intraday', enabled: true }] }, strategies: { rules: [] }, strategyCandidates: [], loadedAt: new Date().toISOString(), errors: []
   }))
   ipcMain.handle('trade-master:run', (_event, command, args = []) => {
     const operation = args[0]
@@ -212,6 +212,10 @@ const registerCaptureFixture = () => {
   ipcMain.handle('household:member:update', () => ({ ok: true }))
   ipcMain.handle('household:account:update', () => ({ ok: true }))
   ipcMain.handle('household:trade:record', () => ({ ok: true }))
+  ipcMain.handle('automation:run', async (_event, id) => {
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    return { ok: true, run: { taskId: id, status: 'success' } }
+  })
   ipcMain.handle('setup:prepare', async (event, requestId) => {
     const send = (progress) => event.sender.send('setup:progress', { requestId, progress })
     send({ stage: 'checking', percent: 8, title: '正在检查运行环境', detail: '无需打开终端，一般只需几秒' })
@@ -310,6 +314,7 @@ async function capture() {
     localStorage.removeItem('jiucai.context.activeTool')
     localStorage.removeItem('jiucai.sidebar.recentExpanded')
     localStorage.removeItem('jiucai.sidebar.automationExpanded')
+    localStorage.setItem('jiucai.onboarding.automations', 'dismissed')
   `)
   await window.loadFile(join(projectRoot, 'out/renderer/index.html'), { search: 'skipOnboarding=1' })
   await new Promise((resolve) => setTimeout(resolve, 350))
@@ -389,6 +394,11 @@ async function capture() {
     await new Promise((resolve) => setTimeout(resolve, 320))
     const automation = await window.webContents.capturePage()
     await writeFile(join(outputRoot, 'message-modules-automation.png'), automation.toPNG())
+    await window.webContents.executeJavaScript(`document.querySelector('.message-retry-action')?.click()`)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    const retrying = await window.webContents.capturePage()
+    await writeFile(join(outputRoot, 'message-modules-retrying.png'), retrying.toPNG())
+    await new Promise((resolve) => setTimeout(resolve, 550))
     window.setSize(1120, 760)
     await new Promise((resolve) => setTimeout(resolve, 180))
     const compact = await window.webContents.capturePage()

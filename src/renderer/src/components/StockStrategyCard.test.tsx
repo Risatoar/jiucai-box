@@ -11,20 +11,28 @@ const baseCard: StockStrategyCardData = {
 }
 
 describe('StockStrategyTags signal hierarchy', () => {
-  it('keeps an automation push collapsed by default', () => {
-    const html = renderToStaticMarkup(<StockStrategyTags cards={[baseCard]} defaultExpanded={false} />)
-    expect(html).toContain('<details class="stock-strategy-disclosure">')
+  it('keeps the push visible while leaving the stock details collapsed by default', () => {
+    const html = renderToStaticMarkup(<StockStrategyTags cards={[baseCard]} />)
+    expect(html).toContain('<details class="stock-strategy-disclosure" open="">')
     expect(html).toContain('本次策略推送')
     expect(html).toContain('1 个标的 · 强烈买入 1')
+    expect(html).toContain('stock-signal-highlight')
     expect(html).not.toContain('stock-strategy-details')
   })
 
   it('renders a strong signal as an immediately visible highlighted card', () => {
-    const html = renderToStaticMarkup(<StockStrategyTags cards={[baseCard, { ...baseCard, code: '600000', name: '普通观察', signal: 'none', stance: '等待确认' }]} />)
+    const html = renderToStaticMarkup(<StockStrategyTags cards={[baseCard, { ...baseCard, code: '600000', name: '普通观察', signal: 'none', stance: '等待确认' }]} onHandleSignal={() => undefined} />)
     expect(html).toContain('stock-signal-highlight buy')
     expect(html).toContain('强烈买入')
     expect(html).toContain('回踩买点 · 4.10-4.12')
+    expect(html).toContain('登记处理')
     expect(html.indexOf('强烈买入')).toBeLessThan(html.indexOf('普通观察'))
+  })
+
+  it('shows a completed handling result without another execution button', () => {
+    const html = renderToStaticMarkup(<StockStrategyTags cards={[{ ...baseCard, handling: { status: 'executed', handledAt: '2026-07-22T10:00:00.000Z', accountId: 'primary-account', trade: { code: '510300', side: 'buy', quantity: 300, price: 4.12 } } }]} onHandleSignal={() => undefined} />)
+    expect(html).toContain('已买入登记')
+    expect(html).not.toContain('>登记处理<')
   })
 
   it('keeps observation-only cards compact without a false highlight', () => {
@@ -40,7 +48,7 @@ describe('StockStrategyTags signal hierarchy', () => {
       { ...baseCard, code: '300438', name: '鹏辉能源', signal: 'prepare_sell', sellPoints: [{ label: '准备减仓', condition: '下一根完整15分钟仍走弱' }] },
       { ...baseCard, code: '600011', name: '华能国际', signal: 'watch' },
       baseCard
-    ]} defaultExpanded={false} />)
+    ]} />)
 
     expect(html).toContain('强烈买入 1 · 准备卖出 1 · 关注 1')
     expect(html).toContain('stock-signal-highlight sell prepare')

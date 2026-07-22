@@ -207,6 +207,7 @@
 .settings-message.progress { color: var(--muted); }
 .settings-message.success { color: var(--green); }
 .settings-message.error { color: var(--red); }
+.ai-timeout-settings { align-items: end; }.ai-timeout-settings small { padding-bottom: 7px; color: var(--muted); font-size: 8px; line-height: 1.5; }
 .status-dot.warning { background: var(--amber); }
 .discipline-setting-row { padding-top: 11px; border-top: 1px solid var(--border-soft); }
 .memory-toggle-list { border-top: 1px solid var(--border-soft); }

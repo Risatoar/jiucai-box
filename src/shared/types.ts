@@ -237,6 +237,14 @@ export interface ChatMessage {
 export type StockStrategyStance = '持仓管理' | '可关注' | '等待确认' | '暂不介入'
 export type StockStrategySignal = 'strong_buy' | 'strong_sell' | 'prepare_buy' | 'prepare_sell' | 'watch' | 'none'
 export type StockStrategySource = 'holding' | 'user' | 'agent'
+export type StockSignalHandlingStatus = 'executed' | 'watching' | 'ignored'
+
+export interface StockSignalHandling {
+  status: StockSignalHandlingStatus
+  handledAt: string
+  accountId?: string
+  trade?: TradeRecordInput
+}
 
 export interface StockStrategyPoint {
   label: string
@@ -268,6 +276,7 @@ export interface StockStrategyCardData {
   nextCheck?: string
   confidence: '低' | '中' | '高'
   dataAsOf?: string
+  handling?: StockSignalHandling
 }
 
 export interface ChatAttachment {
@@ -438,6 +447,7 @@ export interface AiConfig {
   provider: 'openai-compatible' | 'codex-local'
   baseUrl: string
   model: string
+  timeoutSeconds?: number
   apiKey?: string
   codexPath?: string
 }

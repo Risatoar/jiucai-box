@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { access } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import type { AiConfig, AiMessageInput, AiStreamEvent, ChatAttachment } from '../shared/types'
+import { resolveAiTimeoutMs } from '../shared/ai-config'
 import { readAttachment, resolveAttachmentPath } from './attachment-store'
 import { parseCodexJsonLine, readSseJson } from './ai-stream'
 
@@ -254,7 +255,23 @@ const callCodex = async (config: AiConfig, messages: AiMessageInput[], options: 
 }
 
 export const sendAiMessage = async (config: AiConfig, messages: AiMessageInput[], options: AiExecutionOptions = {}): Promise<string> => {
-  if (config.provider === 'openai-compatible') return callOpenAiCompatible(config, messages, options)
-  if (config.provider === 'codex-local') return callCodex(config, messages, options)
-  throw new Error('不支持的 AI Provider')
+  const timeoutMs = options.timeoutMs ?? resolveAiTimeoutMs(config.timeoutSeconds)
+  const controller = new AbortController()
+  let timedOut = false
+  const abort = () => controller.abort(options.signal?.reason)
+  if (options.signal?.aborted) abort()
+  else options.signal?.addEventListener('abort', abort, { once: true })
+  const timer = setTimeout(() => { timedOut = true; controller.abort() }, timeoutMs)
+  const resolvedOptions = { ...options, timeoutMs, signal: controller.signal }
+  try {
+    if (config.provider === 'openai-compatible') return await callOpenAiCompatible(config, messages, resolvedOptions)
+    if (config.provider === 'codex-local') return await callCodex(config, messages, resolvedOptions)
+    throw new Error('不支持的 AI Provider')
+  } catch (error) {
+    if (timedOut) throw new Error(`AI 执行超过 ${Math.round(timeoutMs / 1000)} 秒，已停止本次任务`)
+    throw error
+  } finally {
+    clearTimeout(timer)
+    options.signal?.removeEventListener('abort', abort)
+  }
 }

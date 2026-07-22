@@ -42,6 +42,6 @@ export const extractMemoryCandidates = async (config: AiConfig, messages: AiMess
     '严格输出 JSON：{"memories":[{"content":"...","category":"preference|goal|risk|habit|lesson","confidence":0.0}]}',
     `对话：\n${transcript}`
   ].join('\n\n')
-  const raw = await sendAiMessage(config, [{ role: 'user', content: prompt }], { purpose: 'memory', timeoutMs: 45_000 })
+  const raw = await sendAiMessage(config, [{ role: 'user', content: prompt }], { purpose: 'memory' })
   return validateMemoryCandidates(raw)
 }

@@ -30,6 +30,18 @@ describe('RichMessageContent', () => {
     expect(html).not.toContain('message-result-banner')
   })
 
+  it('所有失败回答都展示可执行重试，重试中禁止重复点击', () => {
+    const ready = renderToStaticMarkup(<RichMessageContent content="发送失败：连接超时" status="error" onRetry={() => undefined} />)
+    const retrying = renderToStaticMarkup(<RichMessageContent content="定时任务执行失败：超时" status="error" retrying onRetry={() => undefined} />)
+
+    expect(ready).toContain('message-retry-action')
+    expect(ready).toContain('重新执行原请求')
+    expect(ready).toContain('>重试</button>')
+    expect(retrying).toContain('disabled=""')
+    expect(retrying).toContain('正在重试')
+    expect(retrying).toContain('spinning')
+  })
+
   it('长分析模块默认展开，同时允许用户手动收起', () => {
     const items = Array.from({ length: 6 }, (_, index) => `- 第 ${index + 1} 项市场变化`).join('\n')
     const html = renderToStaticMarkup(<RichMessageContent content={`市场走势与异动：\n${items}`} />)

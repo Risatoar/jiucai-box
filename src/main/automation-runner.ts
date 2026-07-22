@@ -131,7 +131,7 @@ const runAutomationTaskOnce = async (taskId: string, trigger: 'manual' | 'schedu
     const result = await sendAiMessage(config, [
       { role: 'system', content: buildAutomationSystemPrompt(mode, scopeInstruction, snapshot) },
       { role: 'user', content: `${String(task.prompt || '')}\n\n宿主已经完成 Trade Master 调用，不要再次调用工具。\n\n本次工具证据：\n${evidence}` }
-    ], { purpose: 'automation', timeoutMs: 90_000 })
+    ], { purpose: 'automation' })
     const noReply = result.trim() === 'NO_REPLY'
     const cards = noReply || mode === 'voc_monitor' ? [] : parseStockStrategyPayload(result, mode === 'candidate_refresh' ? 5 : 8)
     const vocAnalysis = noReply || mode !== 'voc_monitor' ? undefined : parseVocAnalysis(result, vocEvents)

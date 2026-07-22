@@ -95,7 +95,7 @@ export const generateMarketInsight = async (config: AiConfig, request: MarketIns
     `当前页面证据：${JSON.stringify(requestPayload(request))}`,
     `用户确认交易记录：${tradeContext}`
   ].join('\n\n')
-  const content = await sendAiMessage(config, [{ role: 'user', content: prompt }], { purpose: 'automation', timeoutMs: 90_000 })
+  const content = await sendAiMessage(config, [{ role: 'user', content: prompt }], { purpose: 'automation' })
   const insight = parseMarketInsight(content, request)
   cache.set(cacheKey, { createdAt: Date.now(), insight })
   return insight

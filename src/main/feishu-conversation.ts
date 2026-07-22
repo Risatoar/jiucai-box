@@ -134,7 +134,6 @@ const processIncoming = async (message: FeishuIncomingMessage) => {
   ]
   const reply = safeReply(await sendAiMessage(config, messages, {
     purpose: 'automation',
-    timeoutMs: 90_000,
     workingDirectory: snapshot.home
   }))
   const cliPath = await locateLarkCli()

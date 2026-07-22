@@ -94,6 +94,6 @@ export const analyzeWatchlistOpportunities = async (
     '仅返回一个 JSON 对象，不要 Markdown。格式：{"opportunities":[{"code":"6位代码","score":0到100的数字,"reasons":["最多3条简短理由"]}]}。',
     `候选证据：${JSON.stringify(evidence)}`
   ].join('\n\n')
-  const content = await sendAiMessage(config, [{ role: 'user', content: prompt }], { purpose: 'automation', timeoutMs: 120_000 })
+  const content = await sendAiMessage(config, [{ role: 'user', content: prompt }], { purpose: 'automation' })
   return parseWatchlistOpportunityAnalysis(content, candidates)
 }

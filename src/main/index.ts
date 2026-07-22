@@ -5,7 +5,7 @@ import { sendAiMessage } from './ai-provider'
 import { loadAiConfig, saveAiConfig } from './ai-config-store'
 import { appendChatSessionMessage, createChatSession, listChatSessions, loadChatSession, onChatSessionChanged, saveChatSession, setChatSessionArchived } from './chat-store'
 import { cancelChatRun, finishChatRun, getChatRun, listChatRuns, startChatRun, updateChatRun } from './chat-run-service'
-import { createStrategyCandidate } from './strategy-candidate'
+import { createStrategyCandidate, importStrategyCandidate } from './strategy-candidate'
 import { loadTradeMasterSnapshot, runTradeMaster } from './trade-master'
 import { buildTradeContext } from './trade-context'
 import { saveUserProfile } from './profile-store'
@@ -304,6 +304,10 @@ const registerIpc = (): void => {
       const resolvedConfig = { ...savedConfig, ...config, apiKey: config.apiKey ?? savedConfig.apiKey }
       return { ok: true, ...await createStrategyCandidate(resolvedConfig, prompt.trim(), buildTradeContext(snapshot)) }
     }
+    catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
+  })
+  ipcMain.handle('strategy:import-candidate', async (_event, raw: string) => {
+    try { return { ok: true, ...await importStrategyCandidate(raw) } }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
   })
   ipcMain.handle('strategy:set-status', async (_event, id: string, action: 'pause' | 'enable' | 'promote') => {
