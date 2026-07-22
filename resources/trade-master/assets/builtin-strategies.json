@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "strategies": [
+    { "id": "stock_trend_pullback", "instrument_types": ["stock"], "family": "trend", "enabled": true },
+    { "id": "stock_breakout", "instrument_types": ["stock"], "family": "breakout", "enabled": true },
+    { "id": "etf_core_tactical", "instrument_types": ["etf"], "family": "position", "enabled": true },
+    { "id": "cbond_double_low", "instrument_types": ["cbond"], "family": "rotation", "enabled": true },
+    { "id": "cbond_underlying_linkage", "instrument_types": ["cbond"], "family": "intraday", "enabled": true },
+    { "id": "legacy_fusion_nine_turn", "instrument_types": ["cbond"], "family": "intraday", "periods": ["5m", "15m"], "enabled": true },
+    { "id": "td_sequential", "instrument_types": ["stock", "etf", "cbond"], "family": "sequence", "periods": ["5m", "15m"], "enabled": true },
+    { "id": "support_break_retest", "instrument_types": ["stock", "etf", "cbond"], "family": "structure", "periods": ["5m", "15m"], "enabled": true },
+    { "id": "position_profit_protection", "instrument_types": ["stock", "etf", "cbond"], "family": "risk", "enabled": true },
+    { "id": "position_t_trade", "instrument_types": ["stock", "etf", "cbond"], "family": "position", "enabled": true }
+  ]
+}

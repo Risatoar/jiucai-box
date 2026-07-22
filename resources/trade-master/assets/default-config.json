@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "market": "CN",
+  "timezone": "Asia/Shanghai",
+  "language": "zh-CN",
+  "stale_after_minutes": 10,
+  "quote_conflict_ratio": 0.005,
+  "minimum_quote_sources_for_precise_signal": 2,
+  "cache": {
+    "retention_days": 30,
+    "max_entries": 5000,
+    "max_bytes": 536870912
+  },
+  "risk": {
+    "max_position_ratio": 0.3,
+    "max_single_trade_loss_ratio": 0.01,
+    "max_drawdown_ratio": 0.08,
+    "minimum_cash_buffer_ratio": 0.2
+  },
+  "refinement": {
+    "minimum_history_samples": 30,
+    "minimum_out_of_sample_samples": 10,
+    "minimum_shadow_days": 5,
+    "maximum_drawdown_delta": 0.005,
+    "minimum_profit_factor": 1.05,
+    "maximum_live_win_rate_drop": 0.1
+  }
+}

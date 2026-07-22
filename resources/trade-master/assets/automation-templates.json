@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "timezone": "Asia/Shanghai",
+  "tasks": [
+    { "id": "pre_market", "mode": "pre_market", "title": "盘前交易策略", "description": "开盘前整理今天该看什么、该怎么做", "schedule": { "kind": "cron", "expression": "50 8 * * 1-5" } },
+    { "id": "pre_open_refresh", "mode": "pre_open_refresh", "title": "开盘前刷新", "description": "按持仓更新当日可用数量，并刷新账户、行情和关注品种", "schedule": { "kind": "cron", "expression": "20 9 * * 1-5" } },
+    { "id": "candidate_refresh", "mode": "candidate_refresh", "title": "盘中候选池刷新", "description": "结合盈利目标全市场筛选0至5个合格候选，并标出买入就绪标的", "schedule": { "kind": "market_window", "interval_minutes": 15, "windows": ["09:30-11:30", "13:00-14:57"] } },
+    { "id": "intraday", "mode": "intraday", "title": "盘中盯盘", "description": "监控持仓强买卖信号，并扫描我的收藏和AI发现的高质量买点", "schedule": { "kind": "market_window", "interval_minutes": 3, "windows": ["09:30-11:30", "13:00-14:57"] } },
+    { "id": "voc_monitor", "mode": "voc_monitor", "title": "场外反指监控", "description": "高频检查重点博主更新，分析仓位变化、板块情绪和追涨杀跌风险", "prompt": "只分析本次新增的股票、A股、证券、基金和市场交易相关内容；足球、篮球、竞彩、买球、娱乐和日常生活内容一律忽略。结合今天已有内容与 recentReports 形成今日和近7日总结。重点判断各账号是加仓、减仓、清仓还是无明确动作；可依据标题、口播、字幕、市场隐喻和上下文直接做方向推测，证据不够直接时标注疑似和中低置信度。不需要交叉验证具体证券、真实持仓、成交记录、价格、成交量、K线、完整收盘走势、手续费或交易成本，缺少这些数据不会使反指推测失效。计划卖出、想减仓、看空不等于已经卖出，不能虚构原文没有的动作。先给整体方向结论，再给必要证据、反向情绪风险和原文链接；不要逐条重复无关字段未知，不要输出用户持仓调整或买卖建议。没有新增内容必须返回 NO_REPLY。", "schedule": { "kind": "daily_window", "interval_minutes": 2, "windows": ["07:00-23:30"] } },
+    { "id": "midday_review", "mode": "midday_review", "title": "午盘复盘", "description": "总结上午盘面，并整理下午的操作重点", "schedule": { "kind": "cron", "expression": "0 12 * * 1-5" } },
+    { "id": "automation_health", "mode": "automation_health", "title": "检查任务是否正常", "description": "检查定时任务和飞书提醒是否正常", "schedule": { "kind": "cron", "expression": "35 9,13 * * 1-5" } },
+    { "id": "formal_close", "mode": "formal_close", "title": "正式收盘核对", "description": "收盘后核对行情和持仓记录", "schedule": { "kind": "cron", "expression": "0 15 * * 1-5" } },
+    { "id": "post_market", "mode": "post_market", "title": "盘后复盘", "description": "核对今天的买卖，并总结经验", "schedule": { "kind": "cron", "expression": "15 15 * * 1-5" } },
+    { "id": "refine", "mode": "refine", "title": "优化交易规则", "description": "验证新的交易规则，保留修改前版本", "schedule": { "kind": "cron", "expression": "0 16 * * 1-5" } }
+  ]
+}

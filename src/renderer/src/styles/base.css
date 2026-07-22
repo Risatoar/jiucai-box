@@ -1,0 +1,67 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  color: #20201e;
+  background: #f7f7f5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --bg: #f7f7f5;
+  --panel: #ffffff;
+  --sidebar: #efefec;
+  --border: #deded9;
+  --border-soft: #e9e9e5;
+  --text: #20201e;
+  --muted: #73736d;
+  --subtle: #9a9a93;
+  --green: #178453;
+  --green-soft: #e8f4ed;
+  --red: #c94942;
+  --red-soft: #fbefed;
+  --amber: #a9670a;
+  --amber-soft: #fbf2dd;
+  --blue: #4776a8;
+  --blue-soft: #edf3f9;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+button, input, textarea, select { font: inherit; }
+button { color: inherit; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #5f8fb6; outline-offset: 2px; }
+h1, h2, h3, p { margin: 0; }
+
+.icon-button {
+  width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--panel); display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background 140ms ease, border-color 140ms ease;
+}
+.icon-button:hover { background: #f1f1ee; border-color: #cecec8; }
+.icon-button.ghost { border-color: transparent; background: transparent; }
+.icon-button.ghost:hover { background: #eeeeea; }
+.icon-button:disabled { opacity: .45; cursor: default; }
+
+.primary-button, .secondary-button {
+  min-height: 32px; padding: 0 12px; border-radius: 6px; display: inline-flex; gap: 7px;
+  align-items: center; justify-content: center; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.primary-button { background: #262624; color: white; border: 1px solid #262624; }
+.primary-button:hover { background: #11110f; }
+.secondary-button { background: white; color: var(--text); border: 1px solid var(--border); }
+.secondary-button:hover { background: #f5f5f2; }
+.primary-button:disabled, .secondary-button:disabled { opacity: .4; cursor: default; }
+.text-button { border: 0; background: transparent; color: #456e92; font-size: 12px; cursor: pointer; padding: 4px; }
+
+.up { color: var(--red) !important; }
+.down { color: var(--green) !important; }
+.muted { color: var(--muted) !important; }
+.live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px rgba(23,132,83,.11); }
+.spinning { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.switch { width: 34px; height: 20px; padding: 2px; border-radius: 10px; border: 0; background: #cbc9c3; cursor: pointer; transition: background 140ms ease; }
+.switch span { display: block; width: 16px; height: 16px; background: white; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,.22); transition: transform 140ms ease; }
+.switch.on { background: var(--green); }
+.switch.on span { transform: translateX(14px); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #d4d4ce; border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }

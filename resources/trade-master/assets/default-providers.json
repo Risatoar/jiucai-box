@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "priority": ["sina", "eastmoney", "tencent", "tushare"],
+  "sina": { "enabled": true },
+  "eastmoney": { "enabled": true },
+  "tencent": { "enabled": true },
+  "tushare": {
+    "enabled": false,
+    "token": "",
+    "endpoint": "https://api.tushare.pro"
+  },
+  "request_timeout_ms": 8000
+}

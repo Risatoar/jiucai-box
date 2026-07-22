@@ -1,0 +1,97 @@
+{
+  "name": "jiucai-box",
+  "productName": "韭菜盒子",
+  "version": "0.1.4",
+  "private": true,
+  "description": "把交易记录、行情分析和风险提醒放在一起的本机交易助手",
+  "main": "out/main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/launch-electron-vite.cjs dev",
+    "build": "electron-vite build",
+    "preview": "node scripts/launch-electron-vite.cjs preview",
+    "prepare:mac-runtime": "node scripts/launch-electron-vite.cjs prepare && node scripts/build-voc-ocr.mjs",
+    "package:mac": "node scripts/package-mac.mjs",
+    "package:mac:update": "node scripts/package-mac.mjs",
+    "package:mac:internal": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg zip --arm64 -c.mac.notarize=false -c.mac.forceCodeSigning=false",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
+    "ffmpeg-static": "^5.3.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "wavefile": "^11.0.0",
+    "ws": "^8.21.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.3",
+    "@types/react-dom": "^19.0.2",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^3.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.1",
+    "vitest": "^2.1.8"
+  },
+  "build": {
+    "appId": "com.jiucaibox.desktop",
+    "productName": "韭菜盒子",
+    "asar": true,
+    "compression": "maximum",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "resources/icon.png",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/ffmpeg",
+      "node_modules/onnxruntime-node/bin/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/trade-master",
+        "to": "trade-master"
+      },
+      {
+        "from": "resources/voc-runtime",
+        "to": "voc-runtime"
+      }
+    ],
+    "mac": {
+      "icon": "resources/icon.png",
+      "category": "public.app-category.finance",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "forceCodeSigning": true,
+      "notarize": true,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "韭菜盒子 ${version}"
+    },
+    "artifactName": "${productName}-${version}-${arch}.${ext}"
+  }
+}

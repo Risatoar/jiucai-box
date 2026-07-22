@@ -1,0 +1,1 @@
+export const MARKET_INSIGHT_REFRESH_MS = 5 * 60 * 1000

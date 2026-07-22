@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "enabled": false,
+  "channel": "feishu",
+  "receiver": {
+    "type": "user_id",
+    "id": ""
+  },
+  "identity": "bot",
+  "cli_path": "lark-cli",
+  "duplicate_window_minutes": 60,
+  "maximum_audit_entries": 500,
+  "read_only": true
+}

@@ -1,0 +1,15 @@
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import App from './App'
+import './styles/base.css'
+import './styles/layout.css'
+import './styles/views.css'
+import './styles/onboarding.css'
+import './styles/strategy.css'
+import './styles/kline.css'
+import './styles/stock-strategy-card.css'
+import './styles/message-modules.css'
+import './styles/position-strategy.css'
+import './styles/voc.css'
+
+createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)
