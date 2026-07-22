@@ -23,5 +23,7 @@ describe('automation system prompt', () => {
     expect(prompt).toContain('主账户空仓时仍必须每轮完整扫描我的收藏和AI发现')
     expect(prompt).toContain('所有 monitoring_enabled=true 的账户都必须出现')
     expect(prompt).toContain('source=user/agent')
+    expect(prompt).toContain('prepare_buy/prepare_sell/watch')
+    expect(prompt).toContain('形成中的K线、单纯触价、证据不足只能写 watch')
   })
 })

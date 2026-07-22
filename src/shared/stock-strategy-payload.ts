@@ -4,7 +4,7 @@ const COMPLETE_BLOCK = /<stock_strategy_cards>\s*([\s\S]*?)\s*<\/stock_strategy_
 const stances: StockStrategyStance[] = ['持仓管理', '可关注', '等待确认', '暂不介入']
 const confidences: StockStrategyCardData['confidence'][] = ['低', '中', '高']
 const instrumentTypes: StockStrategyCardData['instrumentType'][] = ['stock', 'etf', 'cbond']
-const signals: NonNullable<StockStrategyCardData['signal']>[] = ['strong_buy', 'strong_sell', 'none']
+const signals: NonNullable<StockStrategyCardData['signal']>[] = ['strong_buy', 'strong_sell', 'prepare_buy', 'prepare_sell', 'watch', 'none']
 const sources: NonNullable<StockStrategyCardData['source']>[] = ['holding', 'user', 'agent']
 
 const cleanText = (value: unknown, max = 160) => {
@@ -44,7 +44,7 @@ const cleanCard = (value: unknown): StockStrategyCardData | null => {
     source: sources.includes(raw.source as NonNullable<StockStrategyCardData['source']>) ? raw.source as NonNullable<StockStrategyCardData['source']> : undefined,
     currentPrice: cleanText(raw.currentPrice, 30),
     changePercent: cleanText(raw.changePercent, 20),
-    signal: signals.includes(raw.signal as NonNullable<StockStrategyCardData['signal']>) ? raw.signal as NonNullable<StockStrategyCardData['signal']> : 'none',
+    signal: signals.includes(raw.signal as NonNullable<StockStrategyCardData['signal']>) ? raw.signal as NonNullable<StockStrategyCardData['signal']> : 'watch',
     stance: stances.includes(raw.stance as StockStrategyStance) ? raw.stance as StockStrategyStance : '等待确认',
     summary,
     strategy: cleanText(raw.strategy, 260),

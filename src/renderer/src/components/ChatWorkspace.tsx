@@ -375,7 +375,7 @@ export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSe
             {message.role === 'assistant' && <div className="assistant-avatar">韭</div>}
             <div className="message-body">
               <div className="message-meta">{message.role === 'user' ? '你' : '韭菜盒子'}<span>{message.timestamp}</span>{message.status === 'error' && <em><AlertCircle size={11} />{sessionId?.startsWith('automation-') ? '执行失败' : '未发送成功'}</em>}</div>
-              {message.role === 'assistant' && <StockStrategyTags cards={cards} content={presentation.content} />}
+              {message.role === 'assistant' && <StockStrategyTags cards={cards} content={presentation.content} defaultExpanded={!isAutomationSession} />}
               {message.role === 'assistant'
                 ? <RichMessageContent
                     content={presentation.content}

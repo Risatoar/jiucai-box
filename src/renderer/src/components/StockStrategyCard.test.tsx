@@ -11,18 +11,40 @@ const baseCard: StockStrategyCardData = {
 }
 
 describe('StockStrategyTags signal hierarchy', () => {
+  it('keeps an automation push collapsed by default', () => {
+    const html = renderToStaticMarkup(<StockStrategyTags cards={[baseCard]} defaultExpanded={false} />)
+    expect(html).toContain('<details class="stock-strategy-disclosure">')
+    expect(html).toContain('本次策略推送')
+    expect(html).toContain('1 个标的 · 强烈买入 1')
+    expect(html).not.toContain('stock-strategy-details')
+  })
+
   it('renders a strong signal as an immediately visible highlighted card', () => {
     const html = renderToStaticMarkup(<StockStrategyTags cards={[baseCard, { ...baseCard, code: '600000', name: '普通观察', signal: 'none', stance: '等待确认' }]} />)
     expect(html).toContain('stock-signal-highlight buy')
-    expect(html).toContain('重点买入信号')
+    expect(html).toContain('强烈买入')
     expect(html).toContain('回踩买点 · 4.10-4.12')
-    expect(html.indexOf('重点买入信号')).toBeLessThan(html.indexOf('普通观察'))
+    expect(html.indexOf('强烈买入')).toBeLessThan(html.indexOf('普通观察'))
   })
 
   it('keeps observation-only cards compact without a false highlight', () => {
     const html = renderToStaticMarkup(<StockStrategyTags cards={[{ ...baseCard, signal: 'none' }]} />)
     expect(html).not.toContain('stock-signal-highlight')
     expect(html).toContain('stock-strategy-tag')
+    expect(html).toContain('stock-card-signal watch')
+    expect(html).toContain('关注')
+  })
+
+  it('distinguishes prepare-to-sell, watch and strong signals in the push summary', () => {
+    const html = renderToStaticMarkup(<StockStrategyTags cards={[
+      { ...baseCard, code: '300438', name: '鹏辉能源', signal: 'prepare_sell', sellPoints: [{ label: '准备减仓', condition: '下一根完整15分钟仍走弱' }] },
+      { ...baseCard, code: '600011', name: '华能国际', signal: 'watch' },
+      baseCard
+    ]} defaultExpanded={false} />)
+
+    expect(html).toContain('强烈买入 1 · 准备卖出 1 · 关注 1')
+    expect(html).toContain('stock-signal-highlight sell prepare')
+    expect(html).toContain('准备卖出')
   })
 
   it('shows the account scope for the same instrument in separate accounts', () => {

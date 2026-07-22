@@ -17,6 +17,15 @@ describe('stock strategy card payload', () => {
     expect(result.cards).toEqual([])
   })
 
+  it('解析准备买卖和关注等级', () => {
+    const result = parseStockStrategyCards(`<stock_strategy_cards>${JSON.stringify([
+      { code: '300438', name: '鹏辉能源', signal: 'prepare_sell', stance: '持仓管理', summary: '准备减仓', buyPoints: [], sellPoints: [{ label: '准备卖出', condition: '下一检查点确认走弱' }], risks: [], evidence: [], confidence: '中' },
+      { code: '600011', name: '华能国际', signal: 'watch', stance: '等待确认', summary: '继续关注', buyPoints: [], sellPoints: [], risks: [], evidence: [], confidence: '低' }
+    ])}</stock_strategy_cards>`, [], 8)
+
+    expect(result.cards.map((card) => card.signal)).toEqual(['prepare_sell', 'watch'])
+  })
+
   it('流式生成机器数据时不把半截标签展示给用户', () => {
     expect(stripStockStrategyPayload('正在回答\n<stock_strategy_cards>[{"code":"510')).toBe('正在回答')
     expect(stripStockStrategyPayload('正在回答\n<stock_strategy_')).toBe('正在回答')
