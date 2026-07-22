@@ -6,6 +6,19 @@ import type { ChatMessage, ChatSession, ChatSessionSummary } from '../shared/typ
 import { recordAccountStateConfirmation } from './account-state-store'
 
 const sessionsDirectory = () => join(process.env.TRADE_MASTER_HOME || join(homedir(), '.trade-master'), 'conversations')
+const sessionChangedListeners = new Set<(session: ChatSessionSummary) => void>()
+
+export const onChatSessionChanged = (listener: (session: ChatSessionSummary) => void) => {
+  sessionChangedListeners.add(listener)
+  return () => sessionChangedListeners.delete(listener)
+}
+
+const notifyChatSessionChanged = ({ messages: _messages, ...summary }: ChatSession) => {
+  for (const listener of sessionChangedListeners) {
+    try { listener(summary) }
+    catch { /* a renderer refresh failure must not fail a persisted conversation */ }
+  }
+}
 
 const normalizeTitle = (session: ChatSession): string => {
   if (session.title && session.title !== '新对话') return session.title
@@ -61,6 +74,7 @@ const writeChatSession = async (input: ChatSession, touchUpdatedAt: boolean): Pr
   const temporary = `${target}.tmp`
   await writeFile(temporary, `${JSON.stringify(session, null, 2)}\n`, 'utf8')
   await rename(temporary, target)
+  notifyChatSessionChanged(session)
   return session
 }
 

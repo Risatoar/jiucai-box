@@ -128,6 +128,10 @@ export const ensureVocBrowser = async (mode: 'headless' | 'visible' = 'headless'
     try { await waitForDebugPort(1_000); return }
     catch { browserProcess = null; browserMode = null }
   }
+  if (!browserProcess && mode === 'headless') {
+    try { await waitForDebugPort(1_000); return }
+    catch { /* no reusable collector browser */ }
+  }
   if (browserProcess) await stopManagedBrowser()
   await mkdir(profileHome(), { recursive: true })
   await cleanupChromeCaches()

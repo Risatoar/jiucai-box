@@ -22,11 +22,10 @@ const FACT_FILES = {
 } as const
 
 const DEFAULT_SKILL_CANDIDATES = [
+  process.env.TRADE_MASTER_SKILL_PATH,
   join(process.resourcesPath || '', 'trade-master'),
-  join(process.cwd(), 'resources/trade-master'),
-  join(homedir(), '.agents/skills/trade-master'),
-  '/Users/bytedance/project/mmm/.agents/skills/trade-master'
-]
+  join(process.cwd(), 'resources/trade-master')
+].filter((candidate): candidate is string => Boolean(candidate))
 
 const readJson = async (path: string): Promise<unknown> => JSON.parse(await readFile(path, 'utf8'))
 

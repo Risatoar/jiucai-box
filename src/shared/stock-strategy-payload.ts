@@ -5,6 +5,7 @@ const stances: StockStrategyStance[] = ['持仓管理', '可关注', '等待确�
 const confidences: StockStrategyCardData['confidence'][] = ['低', '中', '高']
 const instrumentTypes: StockStrategyCardData['instrumentType'][] = ['stock', 'etf', 'cbond']
 const signals: NonNullable<StockStrategyCardData['signal']>[] = ['strong_buy', 'strong_sell', 'none']
+const sources: NonNullable<StockStrategyCardData['source']>[] = ['holding', 'user', 'agent']
 
 const cleanText = (value: unknown, max = 160) => {
   if (typeof value === 'number' && Number.isFinite(value)) return String(value)
@@ -40,6 +41,7 @@ const cleanCard = (value: unknown): StockStrategyCardData | null => {
     exchange: cleanText(raw.exchange, 8),
     instrumentType: instrumentTypes.includes(raw.instrumentType as StockStrategyCardData['instrumentType']) ? raw.instrumentType as StockStrategyCardData['instrumentType'] : undefined,
     accountScope: cleanText(raw.accountScope, 80),
+    source: sources.includes(raw.source as NonNullable<StockStrategyCardData['source']>) ? raw.source as NonNullable<StockStrategyCardData['source']> : undefined,
     currentPrice: cleanText(raw.currentPrice, 30),
     changePercent: cleanText(raw.changePercent, 20),
     signal: signals.includes(raw.signal as NonNullable<StockStrategyCardData['signal']>) ? raw.signal as NonNullable<StockStrategyCardData['signal']> : 'none',

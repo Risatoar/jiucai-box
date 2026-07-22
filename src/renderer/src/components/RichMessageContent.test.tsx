@@ -42,9 +42,33 @@ describe('RichMessageContent', () => {
   it('多账户使用整行独立账户模块展示', () => {
     const html = renderToStaticMarkup(<RichMessageContent content={'## 我 → 我的主账户\n- 现金 7580 元\n## 老婆 → 老婆的账户\n- 鹏辉能源 300 股'} />)
 
-    expect(html.match(/message-module-section neutral account/g)).toHaveLength(2)
+    expect(html.match(/message-entity-group account/g)).toHaveLength(2)
     expect(html).toContain('我的主账户')
     expect(html).toContain('老婆的账户')
     expect(html.match(/独立账户/g)).toHaveLength(2)
+  })
+
+  it('单个标的的触发、失效、风险和检查点聚合在同一外层卡片', () => {
+    const html = renderToStaticMarkup(<RichMessageContent content={'## 127049 希望转2\n### 触发条件\n走势转稳\n### 失效条件\n跌破115.04\n### 主要风险\n量能不足\n### 下一检查点\n下一根5分钟K线'} />)
+
+    expect(html.match(/message-entity-group instrument/g)).toHaveLength(1)
+    expect(html.match(/message-entity-row /g)).toHaveLength(4)
+    expect(html).toContain('127049')
+    expect(html).toContain('希望转2')
+  })
+
+  it('机器策略卡已覆盖标的时不再重复渲染正文标的卡', () => {
+    const html = renderToStaticMarkup(<RichMessageContent coveredInstruments={['127049']} content={'## 127049 希望转2\n### 触发条件\n走势转稳\n## 市场总结\n整体仍偏弱'} />)
+
+    expect(html).not.toContain('message-entity-group instrument')
+    expect(html).toContain('市场总结')
+    expect(html).toContain('整体仍偏弱')
+  })
+
+  it('账户概要已并入账户策略容器时不再重复显示账户卡', () => {
+    const html = renderToStaticMarkup(<RichMessageContent coveredAccounts={['老婆 → 老婆的账户']} content={'## 老婆 → 老婆的账户\n- 持仓和可用数量已确认\n## 市场总结\n整体偏弱'} />)
+
+    expect(html).not.toContain('独立账户')
+    expect(html).toContain('市场总结')
   })
 })

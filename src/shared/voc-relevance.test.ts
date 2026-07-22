@@ -21,6 +21,8 @@ describe('VOC 股市内容过滤', () => {
   it('保留真实股票仓位与情绪内容', () => {
     expect(isStockMarketVocEvent(item('清仓后大盘涨了，这次真的卖飞了 #股票'))).toBe(true)
     expect(isStockMarketVocEvent(item('半导体跌停，吓得我卸载同花顺'))).toBe(true)
+    expect(isStockMarketVocEvent(item('坚持科技，半導體芯片明天冲高我就走一点'))).toBe(true)
+    expect(isStockMarketVocEvent(item('有色现在拿得住，后面考虑走一点'))).toBe(true)
   })
 
   it('保留监控账号使用的明确股市逃顶隐喻', () => {

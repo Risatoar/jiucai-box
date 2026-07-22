@@ -3,11 +3,11 @@ import { parseStockStrategyCards, stripStockStrategyPayload } from './stock-stra
 
 describe('stock strategy card payload', () => {
   it('从回答中提取并隐藏股票策略卡数据', () => {
-    const result = parseStockStrategyCards(`先说结论：等待回踩确认。\n<stock_strategy_cards>[{"code":"510300","name":"沪深300ETF","instrumentType":"etf","signal":"strong_buy","stance":"等待确认","summary":"不追涨，回踩后再判断。","buyPoints":[{"label":"观察买点","price":"4.10-4.12","condition":"缩量企稳并收回均价线"}],"sellPoints":[],"risks":["跌破支撑后放弃"],"evidence":["日线仍在 MA20 上方"],"confidence":"中"}]</stock_strategy_cards>`)
+    const result = parseStockStrategyCards(`先说结论：等待回踩确认。\n<stock_strategy_cards>[{"code":"510300","name":"沪深300ETF","instrumentType":"etf","accountScope":"我 → 我的主账户","source":"agent","signal":"strong_buy","stance":"等待确认","summary":"不追涨，回踩后再判断。","buyPoints":[{"label":"观察买点","price":"4.10-4.12","condition":"缩量企稳并收回均价线"}],"sellPoints":[],"risks":["跌破支撑后放弃"],"evidence":["日线仍在 MA20 上方"],"confidence":"中"}]</stock_strategy_cards>`)
 
     expect(result.content).toBe('先说结论：等待回踩确认。')
     expect(result.cards).toHaveLength(1)
-    expect(result.cards[0]).toMatchObject({ code: '510300', signal: 'strong_buy', stance: '等待确认', confidence: '中' })
+    expect(result.cards[0]).toMatchObject({ code: '510300', accountScope: '我 → 我的主账户', source: 'agent', signal: 'strong_buy', stance: '等待确认', confidence: '中' })
     expect(result.cards[0].buyPoints[0].price).toBe('4.10-4.12')
   })
 

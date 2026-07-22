@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { sendAiMessage } from './ai-provider'
 import { loadAiConfig, saveAiConfig } from './ai-config-store'
-import { appendChatSessionMessage, createChatSession, listChatSessions, loadChatSession, saveChatSession, setChatSessionArchived } from './chat-store'
+import { appendChatSessionMessage, createChatSession, listChatSessions, loadChatSession, onChatSessionChanged, saveChatSession, setChatSessionArchived } from './chat-store'
 import { cancelChatRun, finishChatRun, getChatRun, listChatRuns, startChatRun, updateChatRun } from './chat-run-service'
 import { createStrategyCandidate } from './strategy-candidate'
 import { loadTradeMasterSnapshot, runTradeMaster } from './trade-master'
@@ -16,7 +16,7 @@ import { inspectCandidatePromotion, rollbackStrategies, setStrategyState } from 
 import { createAutomationTask, deleteAutomationTask, installAutomations, preserveCustomAutomations, setAutomationEnabled, updateAutomationTask } from './automation-store'
 import { runAutomationTask, startAutomationScheduler, stopAutomationScheduler } from './automation-runner'
 import { getDesktopStatus, installSwiftBar } from './desktop-integrations'
-import type { AiStreamEvent, AttachmentInput, ChatRunSnapshot, HouseholdAccountInput, HouseholdMemberInput, Instrument, TradeRecordInput, WatchItem } from '../shared/types'
+import type { AiStreamEvent, AttachmentInput, ChatRunSnapshot, ChatSessionSummary, HouseholdAccountInput, HouseholdMemberInput, Instrument, TradeRecordInput, WatchItem } from '../shared/types'
 import type { PositionStrategyRequest } from '../shared/position-strategy'
 import { discardAttachment, importAttachmentFiles, resolveAttachmentPath, saveAttachmentBytes } from './attachment-store'
 import { prepareDependencies } from './setup-service'
@@ -51,6 +51,12 @@ let tray: Tray | null = null
 const broadcastChatRun = (sessionId: string, run: ChatRunSnapshot | null) => {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.webContents.isDestroyed()) window.webContents.send('ai:chat:run-changed', { sessionId, run })
+  }
+}
+
+const broadcastChatSessionChanged = (session: ChatSessionSummary) => {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.webContents.isDestroyed()) window.webContents.send('chat-sessions:changed', session)
   }
 }
 
@@ -423,6 +429,7 @@ app.whenReady().then(async () => {
     } catch { return new Response('附件不存在', { status: 404 }) }
   })
   registerIpc()
+  onChatSessionChanged(broadcastChatSessionChanged)
   createWindow()
   onUpdateStatus((status) => mainWindow?.webContents.send('updates:status-changed', status))
   onFeishuConversationStatus((status) => mainWindow?.webContents.send('notifications:conversation-status-changed', status))

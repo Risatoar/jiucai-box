@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { VocInboxItem, VocSource } from '../shared/voc'
 import { extractDouyinProfileId } from '../shared/voc'
-import { ensureVocSources, updateVocSourceHealth } from './voc-store'
+import { ensureVocSources, ingestVocInbox, updateVocSourceHealth } from './voc-store'
 import { withVocPage } from './voc-browser-cdp'
 import { cleanupVocMediaTemp, readVocMediaEvidence } from './voc-media-reader'
 
@@ -178,6 +178,7 @@ const readDetail = async (source: VocSource, item: DiscoveredItem, skipMediaBefo
     text, transcript: media?.transcript, metadata: {
       collector: 'chrome-cdp-v2', authorProfileId: detail.authorProfileId, authorName: detail.authorName,
       screenText: media?.screenText, transcriptSegments: media?.transcriptSegments,
+      transcriptQuality: media?.transcriptQuality, asrModel: media?.asrModel,
       mediaEvidenceStatus: media?.status || (detail.mediaType === 'video' ? 'missing_media_url' : 'not_required'), mediaEvidenceError: media?.error
     }
   }
@@ -315,6 +316,43 @@ export const runVocBackfill = async (days = 3) => {
       await writeJson(statePath(), state)
     }
     return { skipped: false, cutoff: new Date(cutoff).toISOString(), results }
+  } finally { busy = false }
+}
+
+export const reprocessVocSource = async (sourceId: string, days = 3, contentIds: string[] = []) => {
+  if (busy) return { skipped: true, reason: 'collector_busy', collected: 0, errors: [] as string[] }
+  busy = true
+  const cutoff = Date.now() - Math.max(1, days) * 24 * 60 * 60 * 1000
+  const errors: string[] = []
+  let collected = 0
+  try {
+    await cleanupVocMediaTemp()
+    const source = (await ensureVocSources()).find((item) => item.id === sourceId && item.enabled && item.profileUrl)
+    if (!source) throw new Error('没有找到已启用且已绑定主页的 VOC 账号')
+    const discovered = contentIds.length
+      ? [...new Set(contentIds)].map((contentId) => ({ contentId, url: `https://www.douyin.com/video/${contentId}` }))
+      : await discover(source)
+    for (const item of discovered) {
+      try {
+        console.info(`[VOC] 正在重新识别 ${source.displayName} ${item.contentId}`)
+        const content = await readDetail(source, item, cutoff)
+        if (!content || !isWithinVocLookback(content.publishedAt, cutoff)) continue
+        if (!content.transcript?.trim() || content.metadata?.transcriptQuality !== 'usable') {
+          throw new Error(String(content.metadata?.mediaEvidenceError || '逐字稿质量未达到可用标准'))
+        }
+        content.metadata = { ...content.metadata, replaceExisting: true, reprocessedAt: new Date().toISOString() }
+        await writeJson(join(root(), 'inbox', `${source.id}-${item.contentId}.json`), content)
+        const ingestion = await ingestVocInbox()
+        if (ingestion.errors.length) throw new Error(ingestion.errors.join('；'))
+        collected += 1
+        console.info(`[VOC] 已更新 ${source.displayName} ${item.contentId}`)
+      } catch (error) {
+        const message = `${item.contentId}: ${error instanceof Error ? error.message : String(error)}`
+        errors.push(message)
+        console.error(`[VOC] 重识别失败 ${message}`)
+      }
+    }
+    return { skipped: false, discovered: discovered.length, collected, errors }
   } finally { busy = false }
 }
 

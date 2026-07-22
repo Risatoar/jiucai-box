@@ -23,6 +23,7 @@ export interface DesktopApi {
   loadChatSession: (id: string) => Promise<ChatSession>
   saveChatSession: (session: ChatSession) => Promise<ChatSession>
   setChatSessionArchived: (id: string, archived: boolean) => Promise<ChatSession>
+  onChatSessionChanged: (listener: (session: ChatSessionSummary) => void) => () => void
   loadMemories: () => Promise<MemorySnapshot>
   saveMemorySettings: (settings: MemorySettings) => Promise<MemorySettings>
   createMemory: (input: MemoryInput) => Promise<MemoryItem>

@@ -4,11 +4,12 @@ import { parseStockStrategyPayload, stripStockStrategyPayload } from './stock-st
 describe('stock strategy payload', () => {
   it('从自动化结果中提取多标的卡片并隐藏机器数据', () => {
     const content = `盘中盯盘完成。\n<stock_strategy_cards>${JSON.stringify([
-      { code: '159516', name: '半导体设备ETF', instrumentType: 'etf', signal: 'strong_buy', stance: '等待确认', summary: '不追高', buyPoints: [], sellPoints: [], risks: [], evidence: [], confidence: '中' },
+      { code: '159516', name: '半导体设备ETF', instrumentType: 'etf', accountScope: '我 → 我的主账户', source: 'user', signal: 'strong_buy', stance: '等待确认', summary: '不追高', buyPoints: [], sellPoints: [], risks: [], evidence: [], confidence: '中' },
       { code: '600089', name: '特变电工', instrumentType: 'stock', stance: '持仓管理', summary: '观察完整15分钟走势', buyPoints: [], sellPoints: [], risks: [], evidence: [], confidence: '低' }
     ])}</stock_strategy_cards>`
     expect(parseStockStrategyPayload(content, 8).map((card) => card.code)).toEqual(['159516', '600089'])
     expect(parseStockStrategyPayload(content, 8)[0].signal).toBe('strong_buy')
+    expect(parseStockStrategyPayload(content, 8)[0]).toMatchObject({ accountScope: '我 → 我的主账户', source: 'user' })
     expect(stripStockStrategyPayload(content)).toBe('盘中盯盘完成。')
   })
 

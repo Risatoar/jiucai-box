@@ -13,4 +13,15 @@ describe('automation system prompt', () => {
     expect(prompt).not.toContain('accountScope')
     expect(prompt).not.toContain('daily_account_state')
   })
+
+  it('requires account and instrument aggregation for trading automations', () => {
+    const prompt = buildAutomationSystemPrompt('intraday', '盘中双通道。', {} as TradeMasterSnapshot)
+
+    expect(prompt).toContain('账户内按标的聚合')
+    expect(prompt).toContain('每个标的的结论、当前价和数据时间、策略、触发条件、失效条件、风险、下一检查点必须放在同一个连续区块内')
+    expect(prompt).toContain('禁止先列全部标的')
+    expect(prompt).toContain('主账户空仓时仍必须每轮完整扫描我的收藏和AI发现')
+    expect(prompt).toContain('所有 monitoring_enabled=true 的账户都必须出现')
+    expect(prompt).toContain('source=user/agent')
+  })
 })

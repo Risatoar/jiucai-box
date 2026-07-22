@@ -1,4 +1,4 @@
-import { cp, mkdtemp } from 'node:fs/promises'
+import { cp, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -10,6 +10,13 @@ describe('packaged Trade Master runtime', () => {
     const runtime = join(fixture, 'trade-master')
     const home = join(fixture, 'facts')
     await cp(resolve('resources/trade-master'), runtime, { recursive: true })
+    await rm(join(runtime, 'scripts/dist'), { recursive: true, force: true })
+
+    const build = spawnSync(process.execPath, [join(runtime, 'scripts/build.mjs')], {
+      cwd: runtime,
+      encoding: 'utf8'
+    })
+    expect(build.status, build.stderr).toBe(0)
 
     const result = spawnSync(process.execPath, [join(runtime, 'scripts/dist/cli.js'), 'init'], {
       cwd: tmpdir(),

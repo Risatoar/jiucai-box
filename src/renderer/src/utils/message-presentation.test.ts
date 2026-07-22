@@ -57,8 +57,56 @@ describe('message presentation', () => {
 - 鹏辉能源 300 股
 - 可用数量 300 股`)
 
-    expect(result.sections).toHaveLength(2)
-    expect(result.sections[0]).toMatchObject({ kind: 'account', account: { member: '我', name: '我的主账户' } })
-    expect(result.sections[1]).toMatchObject({ kind: 'account', account: { member: '老婆', name: '老婆的账户' } })
+    expect(result.sections).toHaveLength(0)
+    expect(result.groups).toHaveLength(2)
+    expect(result.groups[0]).toMatchObject({ kind: 'account', account: { member: '我', name: '我的主账户' } })
+    expect(result.groups[1]).toMatchObject({ kind: 'account', account: { member: '老婆', name: '老婆的账户' } })
+  })
+
+  it('把重复的条件字段归回各自标的，而不是拆成跨标的卡片', () => {
+    const result = buildMessagePresentation(`## 本轮5个最值得关注
+1. 127049 希望转2
+2. 当前价：115.569 元
+3. 排序依据：综合排名第1
+
+### 触发条件
+完整5分钟走势转稳，同时成交量改善。
+
+### 失效条件
+跌破今日低点115.04元。
+
+### 下一检查点
+下一根完整5分钟走势。
+1. 127045 牧原转债
+2. 当前价：125.613元
+3. 排序依据：综合排名第2
+
+### 触发条件
+完整15分钟走势确认转稳。
+
+### 主要风险
+成交量不足。`)
+
+    expect(result.sections).toHaveLength(0)
+    expect(result.groups).toHaveLength(2)
+    expect(result.groups[0]).toMatchObject({ instrument: { code: '127049', name: '希望转2' } })
+    expect(result.groups[0].sections.map((section) => section.title)).toEqual(expect.arrayContaining(['本轮5个最值得关注', '触发条件', '失效条件', '下一检查点']))
+    expect(result.groups[1]).toMatchObject({ instrument: { code: '127045', name: '牧原转债' } })
+    expect(result.groups[1].sections.map((section) => section.title)).toEqual(expect.arrayContaining(['标的概览', '触发条件', '主要风险']))
+  })
+
+  it('在账户内部继续按标的聚合', () => {
+    const result = buildMessagePresentation(`## 老婆 → 老婆的账户
+### 300438 鹏辉能源
+- 持仓300股，可用300股
+#### 触发条件
+- 完整15分钟重新站稳
+#### 失效条件
+- 跌破55.80元`)
+
+    expect(result.groups).toHaveLength(1)
+    expect(result.groups[0]).toMatchObject({ kind: 'account', account: { member: '老婆', name: '老婆的账户' } })
+    expect(result.groups[0].instruments).toHaveLength(1)
+    expect(result.groups[0].instruments[0]).toMatchObject({ instrument: { code: '300438', name: '鹏辉能源' } })
   })
 })

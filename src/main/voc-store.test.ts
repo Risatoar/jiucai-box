@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ingestVocInbox, loadVocSnapshot, saveVocRiskReport, updateVocSource } from './voc-store'
+import { collectVocEvidence, ingestVocInbox, loadVocSnapshot, saveVocRiskReport, updateVocSource } from './voc-store'
 
 const previousHome = process.env.TRADE_MASTER_HOME
 afterEach(() => { if (previousHome == null) delete process.env.TRADE_MASTER_HOME; else process.env.TRADE_MASTER_HOME = previousHome })
@@ -12,7 +12,7 @@ describe('voc-store', () => {
     const home = await mkdtemp(join(tmpdir(), 'jiucai-voc-'))
     process.env.TRADE_MASTER_HOME = home
     let snapshot = await loadVocSnapshot()
-    expect(snapshot.sources.map((source) => source.displayName)).toEqual(['峰哥亡命天涯', '王小雨', '大曾子', '闲闲', '闲闲老公'])
+    expect(snapshot.sources.map((source) => source.displayName)).toEqual(['峰哥亡命天涯', '王小雨', '大曾子', '闲闲', '闲闲老公', '小张小张吃饭用缸'])
     expect(snapshot.sources.every((source) => source.status === 'needs_connector')).toBe(true)
 
     await updateVocSource('weibo-fengge', { profileUrl: 'https://weibo.com/u/example', enabled: true })
@@ -48,6 +48,7 @@ describe('voc-store', () => {
     expect(snapshot.sources.find((source) => source.id === 'weibo-fengge')).toMatchObject({ profileUrl: 'https://weibo.com/u/2397417584', status: 'needs_connector' })
     expect(snapshot.sources.find((source) => source.id === 'douyin-wangxiaoyu')).toMatchObject({ profileUrl: 'https://www.douyin.com/user/custom', inverseWeight: .7 })
     expect(snapshot.sources.find((source) => source.id === 'douyin-xianxian-husband')?.profileUrl).toContain('MS4wLjABAAAALMi0G2nrvuUgP00z8zZgndA8w9j3kTI0vZK4ZSK079MUcUuPBAi1WOHa-SByU32C')
+    expect(snapshot.sources.find((source) => source.id === 'douyin-xiaozhang-chifan-yonggang')).toMatchObject({ displayName: '小张小张吃饭用缸', status: 'needs_connector' })
   })
 
   it('rejects a Douyin item whose author does not match the monitored profile', async () => {
@@ -64,5 +65,57 @@ describe('voc-store', () => {
     const result = await ingestVocInbox()
     expect(result.events).toHaveLength(0)
     expect(result.errors[0]).toContain('作者与监控账号不一致')
+  })
+
+  it('retries recent stock events until a report records them', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'jiucai-voc-pending-'))
+    process.env.TRADE_MASTER_HOME = home
+    await loadVocSnapshot()
+    const inbox = join(home, 'voc/inbox')
+    await mkdir(inbox, { recursive: true })
+    await writeFile(join(inbox, 'sector-video.json'), JSON.stringify({
+      schemaVersion: 1, sourceId: 'douyin-xiaozhang-chifan-yonggang', platform: 'douyin', contentId: 'sector-1',
+      publishedAt: new Date().toISOString(), url: 'https://www.douyin.com/video/sector-1', mediaType: 'video',
+      transcript: '半导体芯片明天如果冲高，我考虑走一点',
+      metadata: { authorProfileId: 'MS4wLjABAAAA_sHkSUBr1cape7_GRcft0iyjIy_FI6LbMISErXTyc7FHf6xaHe-bWo8pwX1eJ4Kx' }
+    }))
+    const first = await collectVocEvidence()
+    expect(first.newEvents.map((event) => event.contentId)).toEqual(['sector-1'])
+    expect((await collectVocEvidence()).newEvents.map((event) => event.contentId)).toEqual(['sector-1'])
+    await saveVocRiskReport(first.newEvents, '已处理，无明确动作。')
+    expect((await collectVocEvidence()).newEvents).toHaveLength(0)
+  })
+
+  it('replaces an existing event after higher-quality media reprocessing', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'jiucai-voc-reprocess-'))
+    process.env.TRADE_MASTER_HOME = home
+    await loadVocSnapshot()
+    const inbox = join(home, 'voc/inbox')
+    await mkdir(inbox, { recursive: true })
+    const base = {
+      schemaVersion: 1, sourceId: 'douyin-xiaozhang-chifan-yonggang', platform: 'douyin', contentId: 'replace-1',
+      publishedAt: '2026-07-22T01:00:00.000Z', url: 'https://www.douyin.com/video/replace-1', mediaType: 'video',
+      text: '科技板块', metadata: { authorProfileId: 'MS4wLjABAAAA_sHkSUBr1cape7_GRcft0iyjIy_FI6LbMISErXTyc7FHf6xaHe-bWo8pwX1eJ4Kx' }
+    }
+    await writeFile(join(inbox, 'old.json'), JSON.stringify({ ...base, transcript: '错误识别' }))
+    await ingestVocInbox()
+    await writeFile(join(inbox, 'new.json'), JSON.stringify({ ...base, transcript: '半导体冲高后准备减仓', metadata: { ...base.metadata, replaceExisting: true, asrModel: 'Xenova/whisper-small' } }))
+    expect((await ingestVocInbox()).events[0].transcript).toBe('半导体冲高后准备减仓')
+    expect((await loadVocSnapshot()).recentEvents[0].metadata?.asrModel).toBe('Xenova/whisper-small')
+  })
+
+  it('keeps the previous transcript when a reprocessing attempt has no transcript', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'jiucai-voc-reprocess-failed-'))
+    process.env.TRADE_MASTER_HOME = home
+    await loadVocSnapshot()
+    const inbox = join(home, 'voc/inbox')
+    await mkdir(inbox, { recursive: true })
+    const metadata = { authorProfileId: 'MS4wLjABAAAA_sHkSUBr1cape7_GRcft0iyjIy_FI6LbMISErXTyc7FHf6xaHe-bWo8pwX1eJ4Kx' }
+    const base = { schemaVersion: 1, sourceId: 'douyin-xiaozhang-chifan-yonggang', platform: 'douyin', contentId: 'keep-1', publishedAt: '2026-07-22T01:00:00.000Z', url: 'https://www.douyin.com/video/keep-1', mediaType: 'video', text: '科技板块' }
+    await writeFile(join(inbox, 'old.json'), JSON.stringify({ ...base, transcript: '原有逐字稿', metadata }))
+    await ingestVocInbox()
+    await writeFile(join(inbox, 'failed.json'), JSON.stringify({ ...base, metadata: { ...metadata, replaceExisting: true, mediaEvidenceStatus: 'failed' } }))
+    expect((await ingestVocInbox()).events).toHaveLength(0)
+    expect((await loadVocSnapshot()).recentEvents[0].transcript).toBe('原有逐字稿')
   })
 })

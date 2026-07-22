@@ -188,6 +188,17 @@ export default function App() {
     return () => window.clearInterval(sessionTimer)
   }, [refreshSessions])
   useEffect(() => {
+    if (typeof window.desktopApi?.onChatSessionChanged !== 'function') return
+    return window.desktopApi.onChatSessionChanged((changed) => {
+      void refreshSessions()
+      const visible = viewRef.current === 'chat'
+        && activeSessionIdRef.current === changed.id
+        && document.visibilityState === 'visible'
+        && document.hasFocus()
+      if (changed.messageCount > 0 && !visible) setUnreadSessionIds((current) => new Set(current).add(changed.id))
+    })
+  }, [refreshSessions])
+  useEffect(() => {
     if (conversationsStarted.current) return
     conversationsStarted.current = true
     if (!window.desktopApi) {

@@ -1,11 +1,13 @@
 import { Check, ChevronDown, CircleCheck, CircleDashed, CircleX, Clipboard, Info, Landmark, ListChecks, ShieldAlert, Sparkles } from 'lucide-react'
 import { Fragment, useState } from 'react'
 import type { ChatMessage } from '../../../shared/types'
-import { buildMessagePresentation, type MessageResultState, type MessageSection } from '../utils/message-presentation'
+import { buildMessagePresentation, type MessageEntityGroup, type MessageResultState, type MessageSection } from '../utils/message-presentation'
 
 interface RichMessageContentProps {
   content: string
   status?: ChatMessage['status']
+  coveredInstruments?: string[]
+  coveredAccounts?: string[]
   disabled?: boolean
   onFollowUp?: (prompt: string) => void
   onOpenLink?: (url: string) => void
@@ -50,6 +52,28 @@ function MessageSectionModule({ section, onOpenLink }: { section: MessageSection
   </details>
 }
 
+function EntitySectionRows({ sections, onOpenLink }: { sections: MessageSection[]; onOpenLink?: (url: string) => void }) {
+  return <div className="message-entity-rows">
+    {sections.map((section) => <section className={`message-entity-row ${section.tone}`} key={section.id}>
+      <header>{section.title}</header>
+      <SectionContent section={section} onOpenLink={onOpenLink} />
+    </section>)}
+  </div>
+}
+
+function MessageEntityGroupModule({ group, nested = false, onOpenLink }: { group: MessageEntityGroup; nested?: boolean; onOpenLink?: (url: string) => void }) {
+  const title = group.account
+    ? <span className="message-account-title"><Landmark size={14} /><span><strong>{group.account.member || group.account.name}</strong>{group.account.member && <small>{group.account.name}</small>}</span><em>独立账户</em></span>
+    : <span className="message-instrument-title"><span className="asset-badge">标</span><strong>{group.instrument?.name || group.title}</strong>{group.instrument && <small>{group.instrument.code}</small>}</span>
+  return <section className={`message-entity-group ${group.kind} ${nested ? 'nested' : ''}`}>
+    <header>{title}</header>
+    <EntitySectionRows sections={group.sections} onOpenLink={onOpenLink} />
+    {group.instruments.length > 0 && <div className="message-account-instruments">
+      {group.instruments.map((instrument) => <MessageEntityGroupModule group={instrument} key={instrument.id} nested onOpenLink={onOpenLink} />)}
+    </div>}
+  </section>
+}
+
 const followUps = (state?: MessageResultState) => state === 'error'
   ? [
       { label: '解释原因', icon: Info, prompt: '请解释上一条失败的直接原因、影响范围和当前还能做什么。' },
@@ -65,10 +89,20 @@ const followUps = (state?: MessageResultState) => state === 'error'
         { label: '复核风险', icon: ShieldAlert, prompt: '请复核上一条回答中的风险、证据不足和可能误判。' }
       ]
 
-export function RichMessageContent({ content, status, disabled, onFollowUp, onOpenLink }: RichMessageContentProps) {
+export function RichMessageContent({ content, status, coveredInstruments = [], coveredAccounts = [], disabled, onFollowUp, onOpenLink }: RichMessageContentProps) {
   const [copied, setCopied] = useState(false)
   const [showRaw, setShowRaw] = useState(false)
   const presentation = buildMessagePresentation(content, status)
+  const covered = new Set(coveredInstruments)
+  const coveredAccountSet = new Set(coveredAccounts)
+  const visibleGroups = presentation.groups.flatMap((group) => {
+    if (group.instrument && covered.has(group.instrument.code)) return []
+    if (!group.account) return [group]
+    const instruments = group.instruments.filter((instrument) => !instrument.instrument || !covered.has(instrument.instrument.code))
+    const accountScope = `${group.account.member} → ${group.account.name}`
+    if (coveredAccountSet.has(accountScope)) return instruments.length ? [{ ...group, sections: [], instruments }] : []
+    return group.sections.length || instruments.length ? [{ ...group, instruments }] : []
+  })
   if (!content.trim()) return null
   const copy = async () => {
     await navigator.clipboard?.writeText(content)
@@ -86,6 +120,9 @@ export function RichMessageContent({ content, status, disabled, onFollowUp, onOp
     </div>}
     {presentation.paragraphs.length > 0 && <div className="message-paragraphs">
       {presentation.paragraphs.map((paragraph, index) => <p key={index}><InlineText text={paragraph} onOpenLink={onOpenLink} /></p>)}
+    </div>}
+    {visibleGroups.length > 0 && <div className="message-entity-groups">
+      {visibleGroups.map((group) => <MessageEntityGroupModule group={group} key={group.id} onOpenLink={onOpenLink} />)}
     </div>}
     {presentation.sections.length > 0 && <div className={`message-module-sections ${presentation.sections.length === 1 ? 'single' : ''}`}>
       {presentation.sections.map((section) => <MessageSectionModule key={section.id} section={section} onOpenLink={onOpenLink} />)}

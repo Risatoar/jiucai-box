@@ -43,6 +43,8 @@ npm install
 npm run dev
 ```
 
+仓库已内置版本化的 Trade Master 运行时；首次启动会在本机创建 `~/.trade-master`，初始化默认事实结构和自动化模板。用户持仓、交易记录、密钥与通知配置不会保存在仓库中。开发时如需临时验证其他 Trade Master 版本，可通过 `TRADE_MASTER_SKILL_PATH` 指定运行时目录。
+
 ## macOS 正式打包
 
 面向普通用户分发前，必须完成 Developer ID 签名和 Apple 公证。配置证书与公证凭据后运行：

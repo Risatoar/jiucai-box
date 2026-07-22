@@ -236,6 +236,7 @@ export interface ChatMessage {
 
 export type StockStrategyStance = '持仓管理' | '可关注' | '等待确认' | '暂不介入'
 export type StockStrategySignal = 'strong_buy' | 'strong_sell' | 'none'
+export type StockStrategySource = 'holding' | 'user' | 'agent'
 
 export interface StockStrategyPoint {
   label: string
@@ -249,6 +250,7 @@ export interface StockStrategyCardData {
   exchange?: string
   instrumentType?: 'stock' | 'etf' | 'cbond'
   accountScope?: string
+  source?: StockStrategySource
   currentPrice?: string
   changePercent?: string
   signal?: StockStrategySignal

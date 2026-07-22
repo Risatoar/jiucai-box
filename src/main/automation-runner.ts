@@ -23,6 +23,8 @@ const modeCommand = (mode: string): [string, string[]] => {
   return ['plan', ['today', '--save']]
 }
 
+const INTRADAY_SCOPE_INSTRUCTION = '盘中必须分成两条独立通道。第一条“持仓策略”覆盖本人及已开启监控的家庭账户持仓，分别给买入、持有、减仓或卖出策略；只有闭合K线和独立证据形成强烈买入或卖出信号时才提醒。第二条“自选买点”覆盖非持仓关注列表中的 source=user（我的收藏）和 source=agent（AI发现），只判断是否出现高质量买点，不输出卖出策略；必须以 watchlist monitor 的 new_buy_signals 和 invalidated_buy_signals 为提醒依据，重复的 buy_ready 不得再次提醒。形成中的K线只能预览，不能触发提醒。两条通道都没有材料变化时必须只返回 NO_REPLY。如果存在家庭持仓，必须按“成员 → 账户”分别给结论，结合每位成员的风险偏好，不得把不同人的仓位、成本或可用数量合并；monitoring_enabled=false 的成员或账户不做主动提醒。portfolio 是本人主账户的兼容视图，与 household_portfolios 中 source=primary 的账户是同一份数据，只能计算一次。'
+
 const commandEvidence = async (label: string, command: string, args: string[]) => {
   try { return `${label}：\n${await runTradeMaster(command, args)}` }
   catch (error) { return `${label}失败：${error instanceof Error ? error.message : String(error)}` }
@@ -124,7 +126,7 @@ const runAutomationTaskOnce = async (taskId: string, trigger: 'manual' | 'schedu
       : mode === 'voc_monitor'
         ? `宿主采集器每轮都会回溯最近 24 小时，并按平台内容 ID 跳过已经处理或已确认无效的内容；本任务只处理本轮新增的 newEvents。只看股票、A股、证券、基金和市场交易相关内容；足球、篮球、竞彩、买球、娱乐和日常生活内容一律忽略，不得据此推测仓位。重点给出仓位管理的方向性结论：统一归纳为加仓、减仓、清仓或无明确动作。可以依据标题、口播、字幕、市场隐喻和上下文做保守推测，并标注中低置信度；不得虚构原文没有的动作。不要探究或反复提示持仓数量、成交价格、账户范围和精确仓位，这些字段未知不影响方向判断。区分“已经发生”和“计划/情绪表达”，逐条保留账号、发布时间、原始链接及支持方向判断的原句。自然语言先给整体方向结论，再补必要证据，不要逐条重复“实际持仓未确认”。反向指标只用于提高风险警惕，不能单独形成交易建议。newEvents 为空时必须只返回 NO_REPLY。\n${VOC_ANALYSIS_OUTPUT_INSTRUCTION}`
         : mode === 'intraday'
-          ? '盘中必须分成两条独立通道。第一条“持仓策略”覆盖本人及已开启监控的家庭账户持仓，分别给买入、持有、减仓或卖出策略；只有闭合K线和独立证据形成强烈买入或卖出信号时才提醒。第二条“自选买点”覆盖非持仓关注列表中的 source=user（我的收藏）和 source=agent（AI发现），只判断是否出现高质量买点，不输出卖出策略；必须以 watchlist monitor 的 new_buy_signals 和 invalidated_buy_signals 为提醒依据，重复的 buy_ready 不得再次提醒。形成中的K线只能预览，不能触发提醒。两条通道都没有材料变化时必须只返回 NO_REPLY。如果存在家庭持仓，必须按“成员 → 账户”分别给结论，结合每位成员的风险偏好，不得把不同人的仓位、成本或可用数量合并；monitoring_enabled=false 的成员或账户不做主动提醒。portfolio 是本人主账户的兼容视图，与 household_portfolios 中 source=primary 的账户是同一份数据，只能计算一次。'
+          ? INTRADAY_SCOPE_INSTRUCTION
           : '如果存在家庭持仓，必须按“成员 → 账户”分别给结论，结合每位成员的风险偏好，不得把不同人的仓位、成本或可用数量合并；monitoring_enabled=false 的成员或账户不做主动提醒。portfolio 是本人主账户的兼容视图，与 household_portfolios 中 source=primary 的账户是同一份数据，只能计算一次。'
     const result = await sendAiMessage(config, [
       { role: 'system', content: buildAutomationSystemPrompt(mode, scopeInstruction, snapshot) },
@@ -134,7 +136,10 @@ const runAutomationTaskOnce = async (taskId: string, trigger: 'manual' | 'schedu
     const cards = noReply || mode === 'voc_monitor' ? [] : parseStockStrategyPayload(result, mode === 'candidate_refresh' ? 5 : 8)
     const vocAnalysis = noReply || mode !== 'voc_monitor' ? undefined : parseVocAnalysis(result, vocEvents)
     const visibleResult = noReply ? '' : stripVocAnalysisPayload(stripStockStrategyPayload(result))
-    if (!noReply && mode === 'voc_monitor' && vocEvents.length) await saveVocRiskReport(vocEvents, visibleResult, vocAnalysis)
+    if (mode === 'voc_monitor' && vocEvents.length) {
+      const summary = noReply ? `本批 ${vocEvents.length} 条股市内容已检查，未形成新的仓位或情绪结论。` : visibleResult
+      await saveVocRiskReport(vocEvents, summary, vocAnalysis)
+    }
     const message = automationMessage(noReply
       ? `定时任务「${title}」执行完成，本次没有材料变化（NO_REPLY）。`
       : `定时任务「${title}」执行完成。\n\n${visibleResult}`

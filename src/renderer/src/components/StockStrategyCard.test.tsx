@@ -33,6 +33,21 @@ describe('StockStrategyTags signal hierarchy', () => {
 
     expect(html).toContain('我 → 我的主账户')
     expect(html).toContain('老婆 → 老婆的账户')
+    expect(html.match(/stock-strategy-group account/g)).toHaveLength(2)
     expect(html.match(/stock-strategy-tag /g)).toHaveLength(2)
+  })
+
+  it('groups empty-account watchlist opportunities under the main account and labels their source', () => {
+    const html = renderToStaticMarkup(<StockStrategyTags content={'## 我 → 我的主账户\n- 当前空仓，现金状态已确认\n- 我的收藏和AI发现已完成扫描'} cards={[
+      { ...baseCard, code: '510300', signal: 'none', accountScope: '我 → 我的主账户', source: 'user' },
+      { ...baseCard, code: '588000', name: '科创50ETF', signal: 'none', accountScope: '我 → 我的主账户', source: 'agent' }
+    ]} />)
+
+    expect(html.match(/stock-strategy-group account/g)).toHaveLength(1)
+    expect(html).toContain('我的主账户')
+    expect(html).toContain('我的收藏')
+    expect(html).toContain('AI发现')
+    expect(html).toContain('stock-account-overview')
+    expect(html).toContain('当前空仓，现金状态已确认')
   })
 })

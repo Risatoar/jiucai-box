@@ -7,14 +7,19 @@
   "main": "out/main/index.js",
   "type": "module",
   "scripts": {
+    "build:trade-master": "node resources/trade-master/scripts/build.mjs",
+    "predev": "npm run build:trade-master",
     "dev": "node scripts/launch-electron-vite.cjs dev",
+    "prebuild": "npm run build:trade-master",
     "build": "electron-vite build",
+    "prepreview": "npm run build:trade-master",
     "preview": "node scripts/launch-electron-vite.cjs preview",
     "prepare:mac-runtime": "node scripts/launch-electron-vite.cjs prepare && node scripts/build-voc-ocr.mjs",
     "package:mac": "node scripts/package-mac.mjs",
     "package:mac:update": "node scripts/package-mac.mjs",
     "package:mac:internal": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg zip --arm64 -c.mac.notarize=false -c.mac.forceCodeSigning=false",
     "typecheck": "tsc --noEmit",
+    "pretest": "npm run build:trade-master",
     "test": "vitest run"
   },
   "dependencies": {

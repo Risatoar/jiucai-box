@@ -96,7 +96,8 @@ export const ingestVocInbox = async () => {
       const item = validateInboxItem(await json<unknown>(path), sources)
       observed.push(item)
       const id = eventId(item)
-      if (!existing.has(id)) {
+      const replaceExisting = item.metadata?.replaceExisting === true && Boolean(item.transcript?.trim())
+      if (!existing.has(id) || replaceExisting) {
         const event: VocEvent = { ...item, id, capturedAt: item.capturedAt || new Date().toISOString(), fingerprint: id }
         await writeJson(join(root(), 'events', item.publishedAt.slice(0, 10), `${id}.json`), event)
         events.push(event); existing.add(id)
@@ -145,7 +146,11 @@ export const collectVocEvidence = async () => {
   const snapshot = await loadVocSnapshot()
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
   const eventCutoff = Date.now() - 24 * 60 * 60 * 1000
-  const relevantEvents = ingestion.events.filter((event) => Date.parse(event.publishedAt) >= eventCutoff && isStockMarketVocEvent(event))
+  const reportedEventIds = new Set(snapshot.recentReports.flatMap((report) => report.eventIds))
+  const pendingEvents = [...ingestion.events, ...snapshot.recentEvents.filter((event) => !reportedEventIds.has(event.id))]
+  const relevantEvents = [...new Map(pendingEvents
+    .filter((event) => Date.parse(event.publishedAt) >= eventCutoff && isStockMarketVocEvent(event))
+    .map((event) => [event.id, event])).values()]
   const recentReports = snapshot.recentReports.filter((report) => Date.parse(report.generatedAt) >= cutoff).map((report) => ({
     ...report, summary: report.summary.slice(0, 1200)
   }))

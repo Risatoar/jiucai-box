@@ -2,7 +2,7 @@ import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { appendNamedSessionMessage, createChatSession, listChatSessions, loadChatSession, saveChatSession, setChatSessionArchived } from './chat-store'
+import { appendNamedSessionMessage, createChatSession, listChatSessions, loadChatSession, onChatSessionChanged, saveChatSession, setChatSessionArchived } from './chat-store'
 
 const previousHome = process.env.TRADE_MASTER_HOME
 
@@ -34,6 +34,19 @@ describe('chat-store', () => {
 
     expect(saved).toMatchObject({ id: 'automation-pre_market', title: '盘前交易策略 · 定时任务', messageCount: 1 })
     expect((await listChatSessions())[0].id).toBe('automation-pre_market')
+  })
+
+  it('publishes a session change after an automation result is persisted', async () => {
+    process.env.TRADE_MASTER_HOME = await mkdtemp(join(tmpdir(), 'jiucai-automation-session-event-'))
+    const changed: Array<{ id: string; messageCount: number }> = []
+    const unsubscribe = onChatSessionChanged((session) => changed.push({ id: session.id, messageCount: session.messageCount }))
+
+    await appendNamedSessionMessage('automation-intraday', '盘中盯盘 · 定时任务', {
+      id: 'run-finished', role: 'assistant', content: '定时任务执行完成。', timestamp: '13:15', status: 'normal'
+    })
+    unsubscribe()
+
+    expect(changed.at(-1)).toEqual({ id: 'automation-intraday', messageCount: 1 })
   })
 
   it('archives and restores a conversation without deleting messages or changing recency', async () => {

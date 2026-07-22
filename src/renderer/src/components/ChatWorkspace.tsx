@@ -40,6 +40,7 @@ export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSe
   const scrollRef = useRef<HTMLDivElement>(null)
   const messageRefs = useRef(new Map<string, HTMLElement>())
   const sessionIdRef = useRef(sessionId)
+  const sessionSyncVersionRef = useRef(0)
   const previousRunActiveRef = useRef(Boolean(runState))
   const locallyRunningIdsRef = useRef(new Set<string>())
   sessionIdRef.current = sessionId
@@ -70,6 +71,7 @@ export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSe
 
   useEffect(() => {
     let cancelled = false
+    const syncVersion = ++sessionSyncVersionRef.current
     setInput(loadChatDraft(sessionId))
     setAttachments((current) => {
       if (typeof window.desktopApi?.discardAttachment === 'function') {
@@ -85,10 +87,25 @@ export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSe
     }
     setLoading(true)
     void window.desktopApi.loadChatSession(sessionId)
-      .then((loaded) => { if (!cancelled) setSession(loaded) })
-      .catch(() => { if (!cancelled) setSession(null) })
+      .then((loaded) => { if (!cancelled && sessionSyncVersionRef.current === syncVersion) setSession(loaded) })
+      .catch(() => { if (!cancelled && sessionSyncVersionRef.current === syncVersion) setSession(null) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
+  }, [sessionId])
+
+  useEffect(() => {
+    if (!sessionId || typeof window.desktopApi?.onChatSessionChanged !== 'function') return
+    let cancelled = false
+    const unsubscribe = window.desktopApi.onChatSessionChanged((changed) => {
+      if (changed.id !== sessionId) return
+      const syncVersion = ++sessionSyncVersionRef.current
+      void window.desktopApi!.loadChatSession(sessionId)
+        .then((loaded) => {
+          if (!cancelled && sessionSyncVersionRef.current === syncVersion) setSession(loaded)
+        })
+        .catch(() => undefined)
+    })
+    return () => { cancelled = true; unsubscribe() }
   }, [sessionId])
 
   useEffect(() => {
@@ -358,11 +375,13 @@ export function ChatWorkspace({ aiConfig, sessionId, runState, instruments, onSe
             {message.role === 'assistant' && <div className="assistant-avatar">韭</div>}
             <div className="message-body">
               <div className="message-meta">{message.role === 'user' ? '你' : '韭菜盒子'}<span>{message.timestamp}</span>{message.status === 'error' && <em><AlertCircle size={11} />{sessionId?.startsWith('automation-') ? '执行失败' : '未发送成功'}</em>}</div>
-              {message.role === 'assistant' && <StockStrategyTags cards={cards} />}
+              {message.role === 'assistant' && <StockStrategyTags cards={cards} content={presentation.content} />}
               {message.role === 'assistant'
                 ? <RichMessageContent
                     content={presentation.content}
                     status={message.status}
+                    coveredInstruments={cards.map((card) => card.code)}
+                    coveredAccounts={cards.flatMap((card) => card.accountScope ? [card.accountScope] : [])}
                     disabled={sending || attaching || automationRunning}
                     onFollowUp={(prompt) => void send(prompt)}
                     onOpenLink={(url) => void window.desktopApi?.openExternal(url)}

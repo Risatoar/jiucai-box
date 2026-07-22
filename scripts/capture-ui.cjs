@@ -95,20 +95,53 @@ const registerCaptureFixture = () => {
 
 ## 我 → 我的主账户
 - 现金 7580 元，159516 和 118071 已清仓，不能重复计算为持仓
-- 下午继续空仓观察，不追涨；只有完整 15 分钟结构确认后再人工复核
-- 当前没有买入或卖出动作
+- 当前空仓；已扫描我的收藏和 AI 发现，本轮没有新增强买点
+- 半导体设备ETF等待完整 15 分钟结构确认，科创50ETF等待回踩，不追涨
+- 下一检查点：13:15 复核关注池完整 15 分钟走势
 
 ## 老婆 → 老婆的账户
 - 鹏辉能源 300 股，可用数量 300 股；午盘价格 56.73 元
 - 成交和成本变化尚未核对完，不追加减仓数量，也不补仓
 - 下午先看 56.20 元观察位，完整 15 分钟确认后再给独立策略
 
-风险与下一检查点：
+## 公共风险与下一检查点
 - 不得用主账户现金替老婆账户计算仓位
 - 13:15 检查两个账户各自的完整 15 分钟走势`, stockStrategyCards: [
-        { code: '300438', name: '鹏辉能源', exchange: 'SZ', instrumentType: 'stock', accountScope: '我 → 我的主账户', currentPrice: '56.73', changePercent: '-1.82%', signal: 'none', stance: '未持仓观察', summary: '主账户当前未持有，不得借用老婆账户的持仓事实生成卖出动作。', strategy: '仅观察完整 15 分钟结构，不追涨、不代替另一账户计算仓位。', buyPoints: [], sellPoints: [], support: '56.20', resistance: '58.00', stopLoss: '--', invalidation: '未形成独立买点前保持观察。', risks: ['主账户未持仓', '禁止跨账户合并数量'], evidence: ['主账户持仓快照无该证券'], nextCheck: '13:15 完整 15 分钟 K 线', confidence: '中', dataAsOf: '11:30' },
-        { code: '300438', name: '鹏辉能源', exchange: 'SZ', instrumentType: 'stock', accountScope: '老婆 → 老婆的账户', currentPrice: '56.73', changePercent: '-1.82%', signal: 'none', stance: '持仓管理', summary: '老婆账户持有 300 股且可用 300 股，成交与成本变化仍待核对。', strategy: '先看 56.20 元观察位，完整 15 分钟确认后再给该账户独立策略。', buyPoints: [], sellPoints: [], support: '56.20', resistance: '58.00', stopLoss: '55.80', invalidation: '成本或可用数量核对不完整时不执行。', risks: ['成本尚未复核', '只能使用老婆账户可用数量'], evidence: ['老婆账户持仓 300 股', '可用数量 300 股'], nextCheck: '13:15 完整 15 分钟 K 线', confidence: '中', dataAsOf: '11:30' }
+        { code: '159516', name: '半导体设备ETF', exchange: 'SZ', instrumentType: 'etf', accountScope: '我 → 我的主账户', source: 'user', currentPrice: '0.727', changePercent: '+0.65%', signal: 'none', stance: '等待确认', summary: '我的收藏已完成扫描，完整15分钟买点尚未形成。', strategy: '空仓账户优先等待回踩确认，不追涨。', buyPoints: [], sellPoints: [], support: '0.710', resistance: '0.740', stopLoss: '--', invalidation: '放量跌破0.710后本轮观察失效。', risks: ['形成中的K线不能触发买入'], evidence: ['我的收藏持续监控'], nextCheck: '13:15 完整 15 分钟 K 线', confidence: '中', dataAsOf: '11:30' },
+        { code: '588000', name: '科创50ETF', exchange: 'SH', instrumentType: 'etf', accountScope: '我 → 我的主账户', source: 'agent', currentPrice: '2.016', changePercent: '+1.07%', signal: 'none', stance: '等待确认', summary: 'AI发现候选仍在复核，当前没有新增强买点。', strategy: '等待回踩和独立量能，不以盘中拉升追入。', buyPoints: [], sellPoints: [], support: '1.980', resistance: '2.050', stopLoss: '--', invalidation: '跌回日线支撑下方后移出本轮买点观察。', risks: ['当日涨幅偏高'], evidence: ['AI候选模型仍为观察'], nextCheck: '下一根完整 15 分钟 K 线', confidence: '中', dataAsOf: '11:30' },
+        { code: '300438', name: '鹏辉能源', exchange: 'SZ', instrumentType: 'stock', accountScope: '老婆 → 老婆的账户', source: 'holding', currentPrice: '56.73', changePercent: '-1.82%', signal: 'none', stance: '持仓管理', summary: '老婆账户持有 300 股且可用 300 股，成交与成本变化仍待核对。', strategy: '先看 56.20 元观察位，完整 15 分钟确认后再给该账户独立策略。', buyPoints: [], sellPoints: [], support: '56.20', resistance: '58.00', stopLoss: '55.80', invalidation: '成本或可用数量核对不完整时不执行。', risks: ['成本尚未复核', '只能使用老婆账户可用数量'], evidence: ['老婆账户持仓 300 股', '可用数量 300 股'], nextCheck: '13:15 完整 15 分钟 K 线', confidence: '中', dataAsOf: '11:30' }
       ] }
+    ]
+  }
+  const instrumentAggregationSession = {
+    id: 'capture-instrument-aggregation', title: '候选标的聚合展示', createdAt: new Date(Date.now() - 2_900_000).toISOString(), updatedAt: new Date(Date.now() - 85_000).toISOString(), messageCount: 2,
+    messages: [
+      { id: 'capture-instrument-user', role: 'user', content: '把本轮候选的触发条件和风险整理一下。', timestamp: '11:14' },
+      { id: 'capture-instrument-assistant', role: 'assistant', timestamp: '11:15', content: `结论：两个候选都仍是等待确认，不追涨。
+
+## 本轮最值得关注
+1. 127049 希望转2
+2. 当前价：115.569元；数据时间：11:15:21
+3. 排序依据：综合排名第1，日线仍在20日均线上方
+### 触发条件
+完整5分钟走势转稳，同时成交量明显改善。
+### 失效条件
+跌破今日低点115.04元，或日线跌回20日均线下方。
+### 主要风险
+5分钟走势未确认，成交量不足。
+### 下一检查点
+下一根完整5分钟走势及同期成交量。
+1. 127045 牧原转债
+2. 当前价：125.613元；数据时间：11:15:21
+3. 排序依据：综合排名第2，日线趋势向上
+### 触发条件
+完整15分钟走势确认转稳，同时成交量恢复。
+### 失效条件
+跌破124.80元后放弃本轮观察。
+### 主要风险
+流动性和近期强度仍需复核。
+### 下一检查点
+下一根完整15分钟走势。` }
     ]
   }
   const singleModuleSession = {
@@ -134,7 +167,7 @@ const registerCaptureFixture = () => {
     ] },
     { id: 'automation-candidate_refresh', title: '盘中候选池刷新 · 定时任务', createdAt: new Date(Date.now() - 7_200_000).toISOString(), updatedAt: new Date(Date.now() - 1_800_000).toISOString(), messageCount: 6, messages: [{ id: 'automation-candidate-message', role: 'assistant', content: '候选池已刷新。', timestamp: '10:50' }] }
   ]
-  const captureSessions = [captureSession, multiAccountSession, singleModuleSession, automationSessions[0], secondarySession, automationSessions[1]]
+  const captureSessions = [captureSession, multiAccountSession, instrumentAggregationSession, singleModuleSession, automationSessions[0], secondarySession, automationSessions[1]]
   const archivedSessionIds = new Set()
   const watchlist = { instruments: [
     { code: '510300', name: '沪深300ETF', type: 'etf', exchange: 'SH', source: 'user', status: 'active', score: 82, signal: '观察' },
@@ -344,6 +377,10 @@ async function capture() {
     await new Promise((resolve) => setTimeout(resolve, 320))
     const accounts = await window.webContents.capturePage()
     await writeFile(join(outputRoot, 'message-modules-accounts.png'), accounts.toPNG())
+    await window.webContents.executeJavaScript(`document.querySelector('[data-preview-session-id="capture-instrument-aggregation"]')?.click()`)
+    await new Promise((resolve) => setTimeout(resolve, 320))
+    const instruments = await window.webContents.capturePage()
+    await writeFile(join(outputRoot, 'message-modules-instruments.png'), instruments.toPNG())
     await window.webContents.executeJavaScript(`document.querySelector('[data-preview-session-id="capture-single-module"]')?.click()`)
     await new Promise((resolve) => setTimeout(resolve, 320))
     const single = await window.webContents.capturePage()

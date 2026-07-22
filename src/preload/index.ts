@@ -31,6 +31,11 @@ const api: DesktopApi = {
   loadChatSession: (id) => ipcRenderer.invoke('chat-sessions:load', id),
   saveChatSession: (session) => ipcRenderer.invoke('chat-sessions:save', session),
   setChatSessionArchived: (id, archived) => ipcRenderer.invoke('chat-sessions:set-archived', id, archived),
+  onChatSessionChanged: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, session: Parameters<typeof listener>[0]) => listener(session)
+    ipcRenderer.on('chat-sessions:changed', handler)
+    return () => ipcRenderer.removeListener('chat-sessions:changed', handler)
+  },
   loadMemories: () => ipcRenderer.invoke('memories:load'),
   saveMemorySettings: (settings) => ipcRenderer.invoke('memories:save-settings', settings),
   createMemory: (input) => ipcRenderer.invoke('memories:create', input),
