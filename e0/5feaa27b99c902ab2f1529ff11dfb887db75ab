@@ -1,0 +1,141 @@
+scripts/capture-ui.cjs
+  s_9f486a0252092e::t_a7b68741ffbbca 190,215-218,317,397-401
+src/main/ai-config-store.ts
+  s_9f486a0252092e::t_9623162d4e75cd 5,14-15,27,42,50
+src/main/ai-provider.test.ts
+  s_9f486a0252092e::t_4bd22ea1b52ed7 10,73-86
+src/main/ai-provider.ts
+  s_9f486a0252092e::t_2aa7bd4bce8f88 5,258-276
+src/main/automation-runner.ts
+  s_9f486a0252092e::t_2438679bd9ee5d 134
+src/main/index.ts
+  s_9f486a0252092e::t_793116292bd5d1 8,308-311
+src/main/market-insight.ts
+  s_9f486a0252092e::t_b494144ada8345 98
+src/main/memory-extractor.ts
+  s_9f486a0252092e::t_4da9c8e1742fab 45
+src/main/position-strategy.ts
+  s_9f486a0252092e::t_2aa205c8f38781 213
+src/main/strategy-candidate.test.ts
+  s_a8fec2f0fa9bab::t_8396981544bb9a 6,27-44
+src/main/strategy-candidate.ts
+  s_a8fec2f0fa9bab::t_2c48a46990dd65 7,17-21,33,48,59-101
+src/main/watchlist-opportunity.ts
+  s_9f486a0252092e::t_a69f370292e49e 97
+src/preload/index.ts
+  s_9f486a0252092e::t_c8d5f4362fa79f 100
+src/renderer/src/App.tsx
+  s_9f486a0252092e::t_56f30d34da916f 7,20,26-27,98,353,432-436,468,472,497
+src/renderer/src/components/AutomationOnboardingDialog.test.tsx
+  s_e16ac18b59fc9e::t_aec98f1ccc1ee2 1-22
+src/renderer/src/components/AutomationOnboardingDialog.tsx
+  s_c056647b593a66::t_159b119bab550a 1-34
+src/renderer/src/components/ChatWorkspace.tsx
+  s_cbbb10f3f6cd33::t_d10bce3b3a33e1 4,8,14,25,29-30,34,42,46,184-205,227,238-264,344-365,430,437-438,440,490
+src/renderer/src/components/RichMessageContent.test.tsx
+  s_cbbb10f3f6cd33::t_aeaf0775a9ab54 33-44
+src/renderer/src/components/RichMessageContent.tsx
+  s_cbbb10f3f6cd33::t_9ae235feea78fa 1,12,14,94,134
+src/renderer/src/components/SettingsView.test.tsx
+  s_9f486a0252092e::t_4948716bfc1985 3,20,24,82-90
+src/renderer/src/components/SettingsView.tsx
+  s_9f486a0252092e::t_08c10926a41260 4,71-73,187-208
+src/renderer/src/components/SignalHandlingDialog.test.tsx
+  s_e16ac18b59fc9e::t_cf418b5c976086 1-23
+src/renderer/src/components/SignalHandlingDialog.tsx
+  s_e16ac18b59fc9e::t_27ef9ae6d6e651 1-86
+src/renderer/src/components/StockStrategyCard.test.tsx
+  s_e16ac18b59fc9e::t_6b31130742510d 14-16,19,24,28,32-37,51
+src/renderer/src/components/StockStrategyCard.tsx
+  s_e16ac18b59fc9e::t_04eb175e021bc0 5,39,45-54,58-61,63,99,101-102,142
+src/renderer/src/components/StrategyLabView.tsx
+  s_a8fec2f0fa9bab::t_9f7c6e225f1c01 1-2,4,10,18,27-32,35,56-81,117,120
+src/renderer/src/hooks/useAutomationOnboarding.test.ts
+  s_e16ac18b59fc9e::t_b6eaed34fcac00 1-11
+src/renderer/src/hooks/useAutomationOnboarding.ts
+  s_c056647b593a66::t_bd7acfd54808fb 1-51
+src/renderer/src/main.tsx
+  s_c056647b593a66::t_891c35548ec048 11,15
+src/renderer/src/styles/automation-onboarding.css
+  s_e16ac18b59fc9e::t_3c7711519ba7bf 1-10
+src/renderer/src/styles/message-modules.css
+  s_cbbb10f3f6cd33::t_182b5b095547c7 18
+src/renderer/src/styles/signal-handling.css
+  s_e16ac18b59fc9e::t_459c14d40c65ee 1-11
+src/renderer/src/styles/stock-strategy-card.css
+  s_e16ac18b59fc9e::t_a06ca31698ec05 15,18-19,23,66
+src/renderer/src/styles/strategy.css
+  s_a8fec2f0fa9bab::t_7a4a8880dcc0f3 16-18
+src/renderer/src/styles/views.css
+  s_9f486a0252092e::t_80c62e54ad1bdf 210
+src/renderer/src/utils/chat-retry.test.ts
+  s_c056647b593a66::t_28c0635f535597 1-22
+src/renderer/src/utils/chat-retry.ts
+  s_c056647b593a66::t_d55292f9e5645c 1-18
+src/renderer/src/utils/signal-handling.test.ts
+  s_e16ac18b59fc9e::t_223bc94f81b83f 1-30
+src/renderer/src/utils/signal-handling.ts
+  s_e16ac18b59fc9e::t_7364ea26e006ae 1-46
+src/renderer/src/utils/strategy-transfer.test.ts
+  s_a8fec2f0fa9bab::t_a224a214835b98 1-21
+src/renderer/src/utils/strategy-transfer.ts
+  s_a8fec2f0fa9bab::t_877f72f653c2f0 1-22
+src/shared/ai-config.test.ts
+  s_9f486a0252092e::t_996f2eeddb61f5 1-16
+src/shared/ai-config.ts
+  s_9f486a0252092e::t_c44fa6ac43012c 1-10
+src/shared/api.ts
+  s_9f486a0252092e::t_633534343ec123 72
+src/shared/types.ts
+  s_9f486a0252092e::t_c52c92edd13354 240-247,279,450
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e05feaa27b99c902ab2f1529ff11dfb887db75ab",
+  "prompts": {},
+  "sessions": {
+    "s_9f486a0252092e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8920-1f48-7b02-8f11-bd12b7709365",
+        "model": "unknown"
+      },
+      "human_author": "Risatoar <risatoar@163.com>"
+    },
+    "s_a8fec2f0fa9bab": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f891b-e8a6-77a1-a0c5-169554390ad9",
+        "model": "unknown"
+      },
+      "human_author": "Risatoar <risatoar@163.com>"
+    },
+    "s_c056647b593a66": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8823-9198-7f13-b509-d5732869d6b8",
+        "model": "unknown"
+      },
+      "human_author": "Risatoar <risatoar@163.com>"
+    },
+    "s_cbbb10f3f6cd33": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8493-93a8-7cd1-9473-1d428b47ef1f",
+        "model": "unknown"
+      },
+      "human_author": "Risatoar <risatoar@163.com>"
+    },
+    "s_e16ac18b59fc9e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8842-b640-76f0-a6a4-03a0253e3d51",
+        "model": "unknown"
+      },
+      "human_author": "Risatoar <risatoar@163.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
