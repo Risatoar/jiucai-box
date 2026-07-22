@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import type { VocEvent, VocInboxItem, VocReportAnalysis, VocRiskReport, VocSnapshot, VocSource } from '../shared/voc'
 import { defaultVocSources, extractDouyinProfileId } from '../shared/voc'
 import { isStockMarketVocEvent } from '../shared/voc-relevance'
+import { parseVocSourceTransferJson } from '../shared/voc-source-transfer'
 
 const root = () => join(process.env.TRADE_MASTER_HOME || join(homedir(), '.trade-master'), 'voc')
 const json = async <T>(path: string) => JSON.parse(await readFile(path, 'utf8')) as T
@@ -51,6 +52,29 @@ export const updateVocSource = async (id: string, patch: Pick<VocSource, 'profil
   const updated = { ...current, profileUrl: profileUrl || undefined, enabled: patch.enabled, status, lastError: undefined }
   await writeJson(sourcesPath(), { schemaVersion: 1, sources: sources.map((source) => source.id === id ? updated : source), updatedAt: new Date().toISOString() })
   return updated
+}
+
+export const importVocSources = async (raw: string): Promise<{ sources: VocSource[]; imported: number; added: number }> => {
+  const configs = parseVocSourceTransferJson(raw)
+  const current = await ensureVocSources()
+  const imported = new Map(configs.map((source) => [source.id, source]))
+  const existingIds = new Set(current.map((source) => source.id))
+  const merge = (source: VocSource, config: (typeof configs)[number]): VocSource => {
+    const sameProfile = (source.profileUrl || '') === (config.profileUrl || '')
+    return {
+      ...source,
+      ...config,
+      status: !config.profileUrl ? 'needs_binding' : sameProfile && ['ready', 'error'].includes(source.status) ? source.status : 'needs_connector',
+      ...(sameProfile ? {} : { lastCheckedAt: undefined, lastSeenPublishedAt: undefined, lastError: undefined })
+    }
+  }
+  const sources = current.map((source) => imported.has(source.id) ? merge(source, imported.get(source.id)!) : source)
+  for (const config of configs) {
+    if (existingIds.has(config.id)) continue
+    sources.push({ ...config, status: config.profileUrl ? 'needs_connector' : 'needs_binding' })
+  }
+  await writeJson(sourcesPath(), { schemaVersion: 1, sources, updatedAt: new Date().toISOString(), importedAt: new Date().toISOString() })
+  return { sources, imported: configs.length, added: configs.filter((source) => !existingIds.has(source.id)).length }
 }
 
 export const updateVocSourceHealth = async (id: string, patch: Pick<VocSource, 'status' | 'lastCheckedAt' | 'lastError'>): Promise<VocSource> => {

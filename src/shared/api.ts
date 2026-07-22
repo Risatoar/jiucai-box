@@ -36,6 +36,7 @@ export interface DesktopApi {
   removeWatchItem: (code: string) => Promise<{ ok: boolean; error?: string }>
   scanWatchlist: (items?: WatchItem[]) => Promise<{ ok: boolean; added?: number; updated?: number; removed?: number; active?: number; reviewed?: number; analyzed?: number; scanned?: number; enriched?: number; durationMs?: number; aiDurationMs?: number; sources?: string[]; error?: string }>
   updateVocSource: (id: string, patch: Pick<VocSource, 'profileUrl' | 'enabled'>) => Promise<{ ok: boolean; source?: VocSource; error?: string }>
+  importVocSources: (raw: string) => Promise<{ ok: boolean; imported?: number; added?: number; error?: string }>
   openVocLogin: () => Promise<{ ok: boolean; error?: string }>
   recordTrade: (trade: TradeRecordInput) => Promise<{ ok: boolean; error?: string }>
   createHouseholdMember: (input: HouseholdMemberInput) => Promise<{ ok: boolean; member?: HouseholdMember; error?: string }>
@@ -69,7 +70,6 @@ export interface DesktopApi {
   restartToUpdate: () => Promise<boolean>
   onUpdateStatus: (listener: (status: AppUpdateStatus) => void) => () => void
   createStrategyCandidate: (config: AiConfig, prompt: string) => Promise<{ ok: boolean; file?: string; candidate?: unknown; error?: string }>
-  importStrategyCandidate: (raw: string) => Promise<{ ok: boolean; file?: string; candidate?: unknown; error?: string }>
   notify: (title: string, body: string) => Promise<boolean>
   openPath: (path: string) => Promise<string>
   openExternal: (url: string) => Promise<boolean>

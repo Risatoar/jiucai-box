@@ -1,12 +1,14 @@
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, ExternalLink, History, LogIn, Radio, Save, Settings2, Waves } from 'lucide-react'
-import { Fragment, useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronDown, Clipboard, Download, ExternalLink, History, LogIn, Radio, Save, Settings2, Upload, Waves } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import type { VocSnapshot, VocSource } from '../../../shared/types'
 import { isStockMarketVocEvent } from '../../../shared/voc-relevance'
+import { buildVocSourceTransferJson } from '../../../shared/voc-source-transfer'
 import { buildVocTrendDashboard, type VocActorTrend, type VocTagEvidence } from '../utils/voc-trends'
 
 interface VocMonitorViewProps {
   snapshot: VocSnapshot | null | undefined
   onUpdateSource: (id: string, patch: Pick<VocSource, 'profileUrl' | 'enabled'>) => Promise<{ ok: boolean; error?: string }>
+  onImportSources: (raw: string) => Promise<{ ok: boolean; imported?: number; added?: number; error?: string }>
   onOpenExternal: (url: string) => Promise<boolean>
   onOpenLogin: () => Promise<{ ok: boolean; error?: string }>
 }
@@ -22,12 +24,17 @@ const shanghaiDay = (value: string | Date) => new Intl.DateTimeFormat('en-CA', {
 const eventExcerpt = (event: VocSnapshot['recentEvents'][number]) => [event.title, event.transcript, event.metadata?.screenText, event.text]
   .find((value): value is string => typeof value === 'string' && Boolean(value.trim()))?.replace(/\s+/g, ' ').trim().slice(0, 280) || '该条内容没有可展示的文字'
 
-export function VocMonitorView({ snapshot, onUpdateSource, onOpenExternal, onOpenLogin }: VocMonitorViewProps) {
+export function VocMonitorView({ snapshot, onUpdateSource, onImportSources, onOpenExternal, onOpenLogin }: VocMonitorViewProps) {
   const sources = snapshot?.sources || []
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [transferMessage, setTransferMessage] = useState('')
+  const [transferError, setTransferError] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const importInputRef = useRef<HTMLInputElement>(null)
   const [selectedEvidence, setSelectedEvidence] = useState<{ sourceId: string; label: string; category: VocTagEvidence['category']; items: VocTagEvidence[] } | null>(null)
   const [selectedDrilldown, setSelectedDrilldown] = useState<{ sourceId: string; scope: DrilldownScope } | null>(null)
   useEffect(() => { setDrafts(Object.fromEntries(sources.map((source) => [source.id, source.profileUrl || '']))) }, [snapshot?.loadedAt])
@@ -99,6 +106,30 @@ export function VocMonitorView({ snapshot, onUpdateSource, onOpenExternal, onOpe
     const result = await onOpenLogin()
     setMessage(result.ok ? '请分别登录微博和抖音，完成后直接关闭该 Chrome 窗口' : result.error || '登录窗口打开失败')
   }
+  const exportJson = () => {
+    const content = buildVocSourceTransferJson(sources, drafts)
+    const url = URL.createObjectURL(new Blob([`${content}\n`], { type: 'application/json;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url; anchor.download = `场外情绪监控账号-${new Date().toISOString().slice(0, 10)}.json`; anchor.click()
+    URL.revokeObjectURL(url); setTransferError(false); setTransferMessage(`已导出 ${sources.length} 个监控账号`)
+  }
+  const copyJson = async () => {
+    try {
+      await navigator.clipboard.writeText(buildVocSourceTransferJson(sources, drafts))
+      setCopied(true); setTransferError(false); setTransferMessage(`已复制 ${sources.length} 个监控账号的 JSON`)
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch { setTransferError(true); setTransferMessage('复制失败，请检查系统剪贴板权限') }
+  }
+  const importJson = async (file: File | undefined) => {
+    if (!file || importing) return
+    setImporting(true); setTransferMessage('')
+    try {
+      const result = await onImportSources(await file.text())
+      setTransferError(!result.ok)
+      setTransferMessage(result.ok ? `已导入 ${result.imported || 0} 个账号${result.added ? `，其中新增 ${result.added} 个` : ''}` : result.error || '导入失败')
+    } catch (error) { setTransferError(true); setTransferMessage(`导入失败：${error instanceof Error ? error.message : String(error)}`) }
+    finally { setImporting(false); if (importInputRef.current) importInputRef.current.value = '' }
+  }
   return (
     <section className="content-view voc-view">
       <div className="view-heading"><div><h1>场外情绪</h1><p>把重点博主的公开表达转成反向情绪风险因子，不单独作为买卖依据。{message && <span className="inline-notice"> {message}</span>}</p></div></div>
@@ -125,7 +156,8 @@ export function VocMonitorView({ snapshot, onUpdateSource, onOpenExternal, onOpe
       </section>}
 
       {settingsOpen && <section className="voc-section voc-settings-panel">
-        <header><div><strong>重点监控账号</strong><span>使用独立 Chrome 登录态，只读取下列公开主页。</span></div><button className="secondary-button" onClick={() => void openLogin()} type="button"><LogIn size={13} />登录采集浏览器</button></header>
+        <header><div><strong>重点监控账号</strong><span>使用独立 Chrome 登录态，只读取下列公开主页。</span></div><div className="voc-source-transfer-actions"><button className="secondary-button" onClick={() => void copyJson()} type="button">{copied ? <Check size={13} /> : <Clipboard size={13} />}{copied ? '已复制' : '复制 JSON'}</button><button className="secondary-button" onClick={exportJson} type="button"><Download size={13} />导出 JSON</button><button className="secondary-button" disabled={importing} onClick={() => importInputRef.current?.click()} type="button"><Upload size={13} />{importing ? '导入中…' : '导入 JSON'}</button><input accept="application/json,.json" aria-label="选择监控账号 JSON" hidden onChange={(event) => void importJson(event.target.files?.[0])} ref={importInputRef} type="file" /><button className="secondary-button" onClick={() => void openLogin()} type="button"><LogIn size={13} />登录采集浏览器</button></div></header>
+        {transferMessage && <p aria-live="polite" className={transferError ? 'voc-transfer-notice error' : 'voc-transfer-notice'}>{transferMessage}</p>}
         <div className="voc-source-list">{sources.map((source) => (
           <article key={source.id}>
             <span className={`voc-platform ${source.platform}`}>{platformLabel[source.platform]}</span>

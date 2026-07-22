@@ -5,7 +5,7 @@ import { sendAiMessage } from './ai-provider'
 import { loadAiConfig, saveAiConfig } from './ai-config-store'
 import { appendChatSessionMessage, createChatSession, listChatSessions, loadChatSession, onChatSessionChanged, saveChatSession, setChatSessionArchived } from './chat-store'
 import { cancelChatRun, finishChatRun, getChatRun, listChatRuns, startChatRun, updateChatRun } from './chat-run-service'
-import { createStrategyCandidate, importStrategyCandidate } from './strategy-candidate'
+import { createStrategyCandidate } from './strategy-candidate'
 import { loadTradeMasterSnapshot, runTradeMaster } from './trade-master'
 import { buildTradeContext } from './trade-context'
 import { saveUserProfile } from './profile-store'
@@ -32,7 +32,7 @@ import { createHouseholdAccount, createHouseholdMember, PRIMARY_ACCOUNT_ID, reco
 import { STOCK_CARD_INSTRUCTION } from './stock-card-prompt'
 import { rolloverAvailableQuantitiesBeforeOpen } from './position-session-rollover'
 import type { AutomationTaskInput } from '../shared/automation-schedule'
-import { updateVocSource } from './voc-store'
+import { importVocSources, updateVocSource } from './voc-store'
 import { openVocLoginBrowser, stopVocBrowser } from './voc-browser-cdp'
 import { startVocCollector, stopVocCollector } from './voc-collector'
 import { confirmNormalDiscipline } from './discipline-store'
@@ -258,6 +258,10 @@ const registerIpc = (): void => {
     try { return { ok: true, source: await updateVocSource(id, patch) } }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
   })
+  ipcMain.handle('voc:sources:import', async (_event, raw: string) => {
+    try { return { ok: true, ...await importVocSources(raw) } }
+    catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
+  })
   ipcMain.handle('voc:browser:login', async () => {
     try { return { ok: await openVocLoginBrowser() } }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
@@ -304,10 +308,6 @@ const registerIpc = (): void => {
       const resolvedConfig = { ...savedConfig, ...config, apiKey: config.apiKey ?? savedConfig.apiKey }
       return { ok: true, ...await createStrategyCandidate(resolvedConfig, prompt.trim(), buildTradeContext(snapshot)) }
     }
-    catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
-  })
-  ipcMain.handle('strategy:import-candidate', async (_event, raw: string) => {
-    try { return { ok: true, ...await importStrategyCandidate(raw) } }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
   })
   ipcMain.handle('strategy:set-status', async (_event, id: string, action: 'pause' | 'enable' | 'promote') => {

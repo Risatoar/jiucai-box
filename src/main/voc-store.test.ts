@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { collectVocEvidence, ingestVocInbox, loadVocSnapshot, saveVocRiskReport, updateVocSource } from './voc-store'
+import { collectVocEvidence, importVocSources, ingestVocInbox, loadVocSnapshot, saveVocRiskReport, updateVocSource } from './voc-store'
 
 const previousHome = process.env.TRADE_MASTER_HOME
 afterEach(() => { if (previousHome == null) delete process.env.TRADE_MASTER_HOME; else process.env.TRADE_MASTER_HOME = previousHome })
@@ -49,6 +49,22 @@ describe('voc-store', () => {
     expect(snapshot.sources.find((source) => source.id === 'douyin-wangxiaoyu')).toMatchObject({ profileUrl: 'https://www.douyin.com/user/custom', inverseWeight: .7 })
     expect(snapshot.sources.find((source) => source.id === 'douyin-xianxian-husband')?.profileUrl).toContain('MS4wLjABAAAALMi0G2nrvuUgP00z8zZgndA8w9j3kTI0vZK4ZSK079MUcUuPBAi1WOHa-SByU32C')
     expect(snapshot.sources.find((source) => source.id === 'douyin-xiaozhang-chifan-yonggang')).toMatchObject({ displayName: '小张小张吃饭用缸', status: 'needs_connector' })
+  })
+
+  it('imports account JSON atomically, updates matches and keeps omitted accounts', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'jiucai-voc-import-'))
+    process.env.TRADE_MASTER_HOME = home
+    await loadVocSnapshot()
+    const result = await importVocSources(JSON.stringify({ sources: [
+      { id: 'weibo-fengge', platform: 'weibo', displayName: '峰哥新名称', handle: '峰哥', profileUrl: 'https://weibo.com/u/new', enabled: false, inverseWeight: 0.7 },
+      { id: 'wechat-demo', platform: 'wechat', displayName: '公众号示例', handle: '公众号示例', enabled: true, inverseWeight: 0.5 }
+    ] }))
+    expect(result).toMatchObject({ imported: 2, added: 1 })
+    expect(result.sources.find((source) => source.id === 'weibo-fengge')).toMatchObject({ displayName: '峰哥新名称', profileUrl: 'https://weibo.com/u/new', enabled: false, status: 'needs_connector' })
+    expect(result.sources.find((source) => source.id === 'wechat-demo')).toMatchObject({ status: 'needs_binding' })
+    expect(result.sources.some((source) => source.id === 'douyin-wangxiaoyu')).toBe(true)
+    const saved = JSON.parse(await readFile(join(home, 'voc/sources.json'), 'utf8'))
+    expect(saved.sources).toHaveLength(7)
   })
 
   it('rejects a Douyin item whose author does not match the monitored profile', async () => {

@@ -56,6 +56,7 @@ const api: DesktopApi = {
   removeWatchItem: (code) => ipcRenderer.invoke('watchlist:remove', code),
   scanWatchlist: (items) => ipcRenderer.invoke('watchlist:scan', items),
   updateVocSource: (id, patch) => ipcRenderer.invoke('voc:source:update', id, patch),
+  importVocSources: (raw) => ipcRenderer.invoke('voc:sources:import', raw),
   openVocLogin: () => ipcRenderer.invoke('voc:browser:login'),
   recordTrade: (trade) => ipcRenderer.invoke('portfolio:record', trade),
   createHouseholdMember: (input) => ipcRenderer.invoke('household:member:create', input),
@@ -97,7 +98,6 @@ const api: DesktopApi = {
     return () => ipcRenderer.removeListener('updates:status-changed', handler)
   },
   createStrategyCandidate: (config, prompt) => ipcRenderer.invoke('strategy:create-candidate', config, prompt),
-  importStrategyCandidate: (raw) => ipcRenderer.invoke('strategy:import-candidate', raw),
   notify: (title, body) => ipcRenderer.invoke('system:notify', title, body),
   openPath: (path) => ipcRenderer.invoke('system:open-path', path),
   openExternal: (url) => ipcRenderer.invoke('system:open-external', url),
