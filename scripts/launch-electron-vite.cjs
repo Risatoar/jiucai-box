@@ -1,6 +1,7 @@
 const { spawn } = require('node:child_process')
 const { access, mkdir, readFile, rename, rm, writeFile } = require('node:fs/promises')
 const { join } = require('node:path')
+const { createServer } = require('node:net')
 
 const projectRoot = join(__dirname, '..')
 const appName = '韭菜盒子'
@@ -11,9 +12,32 @@ const runtimeBundle = join(runtimeRoot, `${appName}.app`)
 const runtimeExecutable = join(runtimeBundle, 'Contents/MacOS', appName)
 const runtimeMarker = join(runtimeRoot, 'runtime.json')
 const electronVite = join(projectRoot, 'node_modules/electron-vite/bin/electron-vite.js')
+const defaultPort = 5173
 
 const exists = async (path) => {
   try { await access(path); return true } catch { return false }
+}
+
+const checkPort = (port) => new Promise((resolve) => {
+  const server = createServer()
+  server.unref()
+  server.once('error', (err) => {
+    if (err.code === 'EADDRINUSE') resolve(false)
+    else resolve(true)
+  })
+  server.once('listening', () => {
+    server.close(() => resolve(true))
+  })
+  server.listen(port, '127.0.0.1')
+})
+
+const detectPortConflict = async (command) => {
+  if (command !== 'dev') return
+  const port = Number(process.env.PORT) || defaultPort
+  const available = await checkPort(port)
+  if (available) return
+  console.warn(`\u26A0\uFE0F  端口 ${port} 已被占用，electron-vite 将自动使用下一个可用端口。`)
+  console.warn(`   如需指定端口，请使用：PORT=${port} npm run dev`)
 }
 
 const run = (command, args, options = {}) => new Promise((resolve, reject) => {
@@ -58,6 +82,7 @@ const prepareMacRuntime = async () => {
 
 const launch = async () => {
   const command = process.argv[2] || 'dev'
+  await detectPortConflict(command)
   if (process.platform !== 'darwin') {
     if (command === 'prepare') return
     await run(process.execPath, [electronVite, command, ...process.argv.slice(3)], { cwd: projectRoot, env: process.env })

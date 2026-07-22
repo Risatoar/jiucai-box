@@ -43,6 +43,12 @@ npm install
 npm run dev
 ```
 
+默认使用 5173 端口。如果端口被占用，启动时会提示并自动使用下一个可用端口。也可以手动指定：
+
+```bash
+PORT=5180 npm run dev
+```
+
 仓库已内置版本化的 Trade Master 运行时；首次启动会在本机创建 `~/.trade-master`，初始化默认事实结构和自动化模板。用户持仓、交易记录、密钥与通知配置不会保存在仓库中。开发时如需临时验证其他 Trade Master 版本，可通过 `TRADE_MASTER_SKILL_PATH` 指定运行时目录。
 
 ## macOS 正式打包
