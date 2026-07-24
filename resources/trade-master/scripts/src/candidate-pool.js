@@ -70,6 +70,29 @@ function nextAction(candidate) {
     }[candidate.strategy_lane] ?? '继续观察';
 }
 
+function buildCandidateReasons(candidate) {
+    const typeLabel = candidate.type === 'stock' ? '股票' : candidate.type === 'etf' ? 'ETF' : '可转债';
+    const theme = candidate.market_context?.theme || candidate.theme;
+    const industry = candidate.market_context?.industry || candidate.industry;
+    const lane = candidate.strategy_lane_label || candidate.strategy_lane;
+    const reasons = [];
+    if (theme)
+        reasons.push(`属于${theme}热门概念`);
+    else if (industry)
+        reasons.push(`所属${industry}行业`);
+    if (lane)
+        reasons.push(`归入${lane}策略篮`);
+    const leadership = Number(candidate.screening_leadership_score ?? candidate.leadership_assessment?.score ?? 0);
+    if (leadership >= 55)
+        reasons.push(`龙头/人气评分 ${Math.round(leadership)}`);
+    const change = Number(candidate.change_percent ?? 0);
+    if (change > 0)
+        reasons.push(`当日涨幅 ${change.toFixed(2)}%`);
+    if (!reasons.length)
+        reasons.push(`已通过${typeLabel}全市场初筛，等待日线风险与5/15分钟入场验证`);
+    return reasons.slice(0, 3);
+}
+
 function syncAiRecommendations(watchlist, candidates) {
     let added = 0;
     let updated = 0;
@@ -94,6 +117,8 @@ function syncAiRecommendations(watchlist, candidates) {
             strategyLabel: candidate.strategy_lane_label,
             suitableFor: candidate.suitable_for,
             nextAction: nextAction(candidate),
+            theme: candidate.market_context?.theme || candidate.theme || null,
+            industry: candidate.market_context?.industry || candidate.industry || null,
             model_version: CANDIDATE_MODEL_VERSION,
             status: 'active',
             source: 'agent',
@@ -213,7 +238,7 @@ export async function refreshCandidatePool(market, asOf = new Date().toISOString
             rank: index + 1,
             score: candidate.screening_score,
             status: 'screened_for_ai',
-            reasons: ['已通过分资产全市场初筛，等待日线风险与5/15分钟入场验证'],
+            reasons: buildCandidateReasons(candidate),
             validation: { status: 'pending', conclusion: '这里只是模型初筛，不是买入信号' },
         }));
     }
