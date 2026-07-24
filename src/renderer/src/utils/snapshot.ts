@@ -54,7 +54,43 @@ interface RawWatchItem {
   status?: string
   score?: number
   signal?: string
+  strategyLane?: string
+  strategyLabel?: string
+  suitableFor?: string
+  strategy_lane?: string
+  strategy_lane_label?: string
+  suitable_for?: string
+  nextAction?: string
+  next_action?: string
+  reasons?: string[]
 }
+
+const STOCK_BOARD_PREFIXES: Record<string, string[]> = {
+  main_sh: ['600', '601', '603', '605'],
+  main_sz: ['000', '001', '002', '003'],
+  chinext: ['300', '301'],
+  star: ['688', '689'],
+}
+
+const inferStockBoard = (code: string, type: string): WatchItem['board'] => {
+  if (type !== 'stock')
+    return undefined;
+  for (const [board, prefixes] of Object.entries(STOCK_BOARD_PREFIXES)) {
+    if (prefixes.some((prefix) => String(code).startsWith(prefix)))
+      return board as WatchItem['board'];
+  }
+  return 'other';
+};
+
+const BOARD_LABELS: Record<string, string> = {
+  main_sh: '沪市主板',
+  main_sz: '深市主板',
+  chinext: '创业板',
+  star: '科创板',
+  other: '其他',
+};
+
+export const boardLabel = (board?: WatchItem['board']) => board ? BOARD_LABELS[board] || '' : '';
 
 export const watchlistFromSnapshot = (snapshot: TradeMasterSnapshot | null): WatchItem[] => {
   const watchlist = snapshot?.watchlist as { instruments?: RawWatchItem[] } | null
@@ -70,7 +106,13 @@ export const watchlistFromSnapshot = (snapshot: TradeMasterSnapshot | null): Wat
     score: Number(item.score || 0),
     source: /agent|auto|screen/i.test(item.source || '') ? 'agent' : 'user',
     signal: ['观察', '准备买入', '风险预警', '今日停手'].includes(item.signal || '') ? item.signal as WatchItem['signal'] : '未评估',
-    refreshedAt: '待刷新'
+    refreshedAt: '待刷新',
+    strategyLane: item.strategyLane || item.strategy_lane,
+    strategyLabel: item.strategyLabel || item.strategy_lane_label,
+    suitableFor: item.suitableFor || item.suitable_for,
+    nextAction: item.nextAction || item.next_action,
+    reasons: Array.isArray(item.reasons) ? item.reasons : undefined,
+    board: inferStockBoard(item.code || '--', item.type === 'stock' || item.type === 'etf' ? item.type : 'cbond'),
   }))
   const portfolio = snapshot?.portfolio as { positions?: RawPosition[] } | null
   const householdPositions = snapshot?.household?.accounts.flatMap((account) => account.positions.map((position) => ({
@@ -107,14 +149,14 @@ export const gatesFromSnapshot = (snapshot: TradeMasterSnapshot | null, item: Wa
 const taskDescriptions: Record<string, string> = {
   pre_market: '开盘前整理今天该看什么、该怎么做',
   pre_open_refresh: '开盘前更新账户、行情和关注品种',
-  candidate_refresh: '发掘最多5个低风险、高置信度买入观察机会，并更新AI推荐关注列表',
+  candidate_refresh: '全市场筛选五类策略各2只，共10只候选，并单独标出买入就绪标的',
   intraday: '持仓、关注品种或候选标的有重要变化时提醒你',
   voc_monitor: '高频检查重点博主更新，提取板块与买卖情绪并提示风险',
   midday_review: '总结上午盘面，并整理下午的操作重点',
   automation_health: '检查定时任务和飞书提醒是否正常',
-  formal_close: '收盘后核对行情和持仓记录',
-  post_market: '核对今天的买卖，并总结经验',
-  refine: '验证新的交易规则，保留修改前版本'
+  formal_close: '刷新正式收盘行情，并回填到期的1/3/7/15交易日信号结果',
+  post_market: '复盘历史买卖点，筛选有效与失误案例并反思卖飞、漏接回等问题',
+  refine: '基于历史信号案例生成待验证策略候选，不直接改写活动规则'
 }
 
 const scheduleText = (schedule: ScheduledAutomationTask['schedule'] = {}) => {

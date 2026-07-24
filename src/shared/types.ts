@@ -98,6 +98,9 @@ export interface WatchItem extends Instrument {
   strategyLabel?: string
   suitableFor?: string
   nextAction?: string
+  reasons?: string[]
+  sector?: string
+  board?: 'main_sh' | 'main_sz' | 'chinext' | 'star' | 'other'
 }
 
 export type ChartPeriod = 'timeline' | '1m' | '5m' | '15m' | '30m' | '60m' | '120m' | 'five_day' | '1d' | '1w' | '1M'
