@@ -139,6 +139,9 @@ export function selectCandidateMix(items, limit, userProfile = {}) {
         laneQuotas.set('limit_up', baseQuota + 1);
         laneQuotas.set('hot_leader', baseQuota + 1);
     }
+    // 激进用户不推低波动稳健标的，名额让给高波动篮子；maximum_low_volatility_candidates 由 classifyCandidateTempo 按风险评分算出
+    const maxLowVolatilityCandidates = ranked[0]?.selection_character?.maximum_low_volatility_candidates ?? (aggressive ? 0 : 2);
+    laneQuotas.set('steady', Math.min(laneQuotas.get('steady') ?? baseQuota, maxLowVolatilityCandidates));
     const selectedByLane = new Map(STRATEGY_LANES.map((lane) => [lane.id, []]));
     const used = new Set();
     const scarcityOrder = ['limit_up', 'hot_leader', 'short_3d', 'steady', 'medium_long'];

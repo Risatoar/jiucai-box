@@ -217,7 +217,7 @@ const callCodex = async (config: AiConfig, messages: AiMessageInput[], options: 
   const attachments = messages.flatMap((message) => message.attachments || [])
   const images = [...new Set(attachments.filter((attachment) => attachment.kind === 'image').map((attachment) => resolveAttachmentPath(attachment.storageKey)))]
   const prompt = [
-    '你是韭菜盒子的交易辅助 Agent。只做分析和提醒，不操作券商，不承诺盈利。',
+    '你是韭菜盒子的市场数据观察 Agent。只做数据分析和提醒，仅供学习研究和观察参考，不构成投资建议，不操作券商，不承诺盈利。',
     '结论优先；持仓事实不明时必须标记待确认；买卖建议必须说明触发、失效、成本状态和下一检查点。',
     '用户主要是没有投资基础的宝妈。使用日常中文，先说结论和下一步；少用行业缩写、英文和抽象名词。必须使用专业词时，紧接着用一句白话解释。不要说“事实仓、决策闸门、风险暴露、策略进化、审计契约、影子运行”。',
     ...(options.purpose === 'automation' ? ['这是一次后台自动化分析。宿主已完成工具调用；不要调用任何外部工具、MCP 或 skill，只基于下方事实和工具证据给出最终结果。'] : []),

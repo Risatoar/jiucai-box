@@ -9,13 +9,13 @@ export const signalTradeSide = (card: StockStrategyCardData): 'buy' | 'sell' | n
 export const signalLabel = (card: StockStrategyCardData) => {
   const immediateExpired = card.signal?.startsWith('immediate_')
     && (!card.executionValidUntil || !Number.isFinite(Date.parse(card.executionValidUntil)) || Date.parse(card.executionValidUntil) <= Date.now())
-  if (immediateExpired) return card.signal === 'immediate_sell' ? '推荐卖出（当前点位已过期）' : '推荐买入（当前点位已过期）'
-  if (card.signal === 'immediate_buy') return '立即买入'
-  if (card.signal === 'immediate_sell') return '立即卖出'
-  if (card.signal === 'strong_buy') return '推荐买入'
-  if (card.signal === 'strong_sell') return '推荐卖出'
-  if (card.signal === 'prepare_buy') return '准备买入'
-  if (card.signal === 'prepare_sell') return '准备卖出'
+  if (immediateExpired) return card.signal === 'immediate_sell' ? '关注·下跌（当前点位已过期）' : '关注·上涨（当前点位已过期）'
+  if (card.signal === 'immediate_buy') return '异动·上涨'
+  if (card.signal === 'immediate_sell') return '异动·下跌'
+  if (card.signal === 'strong_buy') return '关注·上涨'
+  if (card.signal === 'strong_sell') return '关注·下跌'
+  if (card.signal === 'prepare_buy') return '观察·上涨'
+  if (card.signal === 'prepare_sell') return '观察·下跌'
   return '关注'
 }
 

@@ -6,7 +6,7 @@ const titles: Record<AppView, { title: string; subtitle: string }> = {
   chat: { title: '问问韭菜盒子', subtitle: '帮你看行情、持仓和风险' },
   portfolio: { title: '家庭持仓', subtitle: '按成员和账户独立记录已确认成交' },
   watchlist: { title: '我的关注', subtitle: '收藏的品种和 AI 发现的机会' },
-  review: { title: '交易复盘', subtitle: '市场评估、热门板块与 AI 推荐复核' },
+  review: { title: '交易复盘', subtitle: '市场评估、热门板块与 AI 数据复核' },
   voc: { title: '场外情绪', subtitle: '重点博主的反向情绪风险因子' },
   strategies: { title: '交易规则', subtitle: '查看哪些规则正在使用' },
   automations: { title: '定时任务', subtitle: '盘前、盘中、盘后自动运行' },
@@ -56,7 +56,7 @@ export function Topbar({ view, title, subtitle, loadedAt, refreshing, onRefresh,
             </div>
           ))}</div> : <div className="notification-empty"><Inbox size={22} /><strong>暂无通知</strong><span>出现需要你关注的变化后，这里会留下记录。</span></div>}
           <p className="notification-footnote">完整通知内容请到飞书查看。</p>
-        </> : <><strong>请放心使用</strong><p>韭菜盒子只提供分析和提醒，不会替你操作券商。只有你确认成交后，持仓才会更新。</p></>}</div>}
+        </> : <><strong>请放心使用</strong><p>韭菜盒子只提供市场数据整理、分析和提醒，仅供学习研究和观察参考，不构成任何证券投资咨询服务或买卖建议。工具不会替你操作券商，只有你确认成交后，持仓才会更新。投资有风险，决策需谨慎。</p></>}</div>}
       </div>
     </header>
   )

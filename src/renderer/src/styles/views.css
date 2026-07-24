@@ -413,3 +413,6 @@
   .feishu-conversation-status { align-items: flex-start; flex-wrap: wrap; }
   .feishu-conversation-status .secondary-button { margin-left: 46px; }
 }
+
+/* ===== 交易确认卡免责声明 ===== */
+.trade-disclaimer { margin-top: 2px; padding: 6px 8px; border-radius: 5px; background: #fdf6e3; color: #7a5a18; font-size: 9px; line-height: 1.4; font-style: normal; }

@@ -157,11 +157,11 @@ export function analyzeEvidence(evidence) {
     }
     else if (position) {
         if (indicators.trend === 'down' && indicators.ma20 != null && quote.price < indicators.ma20) {
-            action = '准备卖出';
+            action = '观察·下跌';
             reasons.push('持仓价格低于 MA20 且趋势向下，等待品种 playbook 的确认条件');
         }
         else if (profitRatio != null && profitRatio > 0.05 && (indicators.rsi14 ?? 0) >= 75) {
-            action = '准备卖出';
+            action = '观察·下跌';
             reasons.push('已有利润且 RSI 偏热，进入分批保护观察');
         }
         else {
@@ -169,7 +169,7 @@ export function analyzeEvidence(evidence) {
         }
     }
     else if (!goalBlocksNewRisk && discipline.state !== 'COOLDOWN' && indicators.trend === 'up' && (indicators.rsi14 ?? 100) < 70) {
-        action = '准备买入';
+        action = '观察·上涨';
         reasons.push('趋势向上且未过热，仍需市场环境与风险收益比确认');
     }
     else {
@@ -178,12 +178,12 @@ export function analyzeEvidence(evidence) {
     const atr = indicators.atr14;
     const quantity = suggestedQuantity(position, evidence.instrument.type, quote.price, portfolio.total_asset, portfolio.cash, config.risk.max_position_ratio);
     const costGate = estimateCostGate(evidence.instrument.type, quote.price, quantity, atr, strategyProfile.preferences?.transaction_costs);
-    if (action === '准备买入' && !costGate.passed) {
+    if (action === '观察·上涨' && !costGate.passed) {
         action = '继续观察';
         blockers.push(costGate.reason);
         reasons.push('新开仓未通过交易成本闸门，不能只看毛价差');
     }
-    else if (action === '准备卖出' && costGate.status !== 'configured') {
+    else if (action === '观察·下跌' && costGate.status !== 'configured') {
         reasons.push('减风险卖出不因成本信息不完整而被否决，但执行前仍需披露卖出侧成本');
     }
     return {

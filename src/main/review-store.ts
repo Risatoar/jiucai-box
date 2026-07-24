@@ -103,7 +103,7 @@ export const buildAggregate = (
   const failedSignals = signals.filter((item) => item.outcomeStatus === 'failed');
   if (failedSignals.length) blindSpots.push(failedSignals.length + ' 个信号方向判断失误，需复核趋势阶段与触发条件');
   const failedCandidates = candidates.filter((item) => item.status === 'failed');
-  if (failedCandidates.length) blindSpots.push(failedCandidates.length + ' 个推荐候选未达预期，需复核次日剧本与失效条件');
+  if (failedCandidates.length) blindSpots.push(failedCandidates.length + ' 个数据候选未达预期，需复核次日剧本与失效条件');
   if (!evaluated.length) blindSpots.push('信号样本不足，暂不能形成稳定的准确率结论');
   const suggestions: string[] = [];
   if (verified) suggestions.push('保留 ' + verified + ' 个已验证候选的共同证据，作为新策略候选的输入');

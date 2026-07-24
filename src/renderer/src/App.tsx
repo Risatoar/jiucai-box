@@ -15,6 +15,7 @@ import { Sidebar } from './components/Sidebar'
 import { StrategyLabView } from './components/StrategyLabView'
 import { SetupView } from './components/SetupView'
 import { Topbar } from './components/Topbar'
+import { DisclaimerBar } from './components/DisclaimerBar'
 import { WatchlistView } from './components/WatchlistView'
 import { ReviewView } from './components/ReviewView'
 import { VocMonitorView } from './components/VocMonitorView'
@@ -469,6 +470,7 @@ export default function App() {
       {!leftCollapsed && <PaneResizeHandle side="left" value={paneWidths.left} min={PANE_LIMITS.left.min} max={PANE_LIMITS.left.max} onPointerResize={(clientX) => resizePaneFromPointer('left', clientX)} onKeyboardResize={(delta) => resizePaneBy('left', delta)} onReset={() => resetPaneWidth('left')} />}
       <main className="main-column">
         <Topbar view={view} title={automationSessionActive ? activeSession?.title || '定时任务结果' : undefined} subtitle={automationSessionActive ? '系统自动检查，不会替你交易' : undefined} loadedAt={snapshot?.loadedAt ? new Date(snapshot.loadedAt).toLocaleTimeString('zh-CN', { hour12: false }) : undefined} refreshing={refreshing} onRefresh={() => void refresh()} factConnected={factConnected} marketConnected={watchlist.some((item) => item.latestPrice > 0)} notifications={notifications} />
+        <DisclaimerBar />
         {content}
       </main>
       {view !== 'settings' && (rightCollapsed ? (

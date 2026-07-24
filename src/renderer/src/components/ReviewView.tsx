@@ -350,7 +350,7 @@ export function ReviewView() {
       <div className="view-heading">
         <div>
           <h1>交易复盘</h1>
-          <p>市场评估、热门板块分析、AI 推荐候选池与买卖信号复核。报告按周期缓存，可切换日报、周报、月报。</p>
+          <p>市场评估、热门板块分析、AI 数据候选池与异动信号复核。报告按周期缓存，可切换日报、周报、月报。</p>
         </div>
         <div className="heading-actions">
           <button className="secondary-button" disabled={busy} onClick={() => void load(true)} type="button">
@@ -395,7 +395,7 @@ export function ReviewView() {
           {[
             { id: 'sectors', label: '热门板块分析', count: report.sectors?.length },
             { id: 'hotstocks', label: '热门股 / 龙头股', count: report.hotStocks?.length },
-            { id: 'candidates', label: 'AI 推荐候选复核', count: report.candidateReviews?.length },
+            { id: 'candidates', label: 'AI 数据候选复核', count: report.candidateReviews?.length },
             { id: 'signals', label: '买卖信号复核', count: report.signalReviews?.length },
           ].map(t => (
             <button key={t.id} className={"review-tab " + (tab === t.id ? 'active' : '')} onClick={() => setTab(t.id as typeof tab)} type="button">

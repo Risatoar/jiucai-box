@@ -30,7 +30,7 @@ describe('parseWatchlistOpportunityAnalysis', () => {
     }))
     const opportunities = readyCandidates.map((item) => ({ code: item.code, score: item.score, reasons: ['验证完成'] }))
     const parsed = parseWatchlistOpportunityAnalysis(JSON.stringify({ opportunities }), readyCandidates)
-    expect(parsed.find((item) => item.code === readyCandidates[0].code)).toMatchObject({ signal: '准备买入', nextAction: '人工复核买点' })
+    expect(parsed.find((item) => item.code === readyCandidates[0].code)).toMatchObject({ signal: '观察·上涨', nextAction: '人工复核买点' })
   })
 
   it('rejects incomplete AI output when enough screened candidates exist', () => {

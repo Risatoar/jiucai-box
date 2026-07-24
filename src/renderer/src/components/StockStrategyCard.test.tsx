@@ -15,8 +15,8 @@ describe('StockStrategyTags signal hierarchy', () => {
   it('keeps the push visible while leaving the stock details collapsed by default', () => {
     const html = renderToStaticMarkup(<StockStrategyTags cards={[baseCard]} />)
     expect(html).toContain('<details class="stock-strategy-disclosure" open="">')
-    expect(html).toContain('本次策略推送')
-    expect(html).toContain('1 个标的 · 推荐买入 1')
+    expect(html).toContain('本次数据观察推送')
+    expect(html).toContain('1 个标的 · 关注·上涨 1')
     expect(html).toContain('stock-signal-highlight')
     expect(html).not.toContain('stock-strategy-details')
   })
@@ -24,12 +24,12 @@ describe('StockStrategyTags signal hierarchy', () => {
   it('renders a strong signal as an immediately visible highlighted card', () => {
     const html = renderToStaticMarkup(<StockStrategyTags cards={[baseCard, { ...baseCard, code: '600000', name: '普通观察', signal: 'none', stance: '等待确认' }]} onHandleSignal={() => undefined} />)
     expect(html).toContain('stock-signal-highlight buy')
-    expect(html).toContain('推荐买入')
-    expect(html).toContain('data-signal-description="买入证据已经形成，建议优先人工复核')
+    expect(html).toContain('关注·上涨')
+    expect(html).toContain('data-signal-description="上涨数据特征已经形成，建议结合自身情况独立复核')
     expect(html).toContain('回踩买点 · 4.10-4.12')
     expect(html).toContain('要做什么 · 趋势回踩买入')
     expect(html).toContain('登记处理')
-    expect(html.indexOf('推荐买入')).toBeLessThan(html.indexOf('普通观察'))
+    expect(html.indexOf('关注·上涨')).toBeLessThan(html.indexOf('普通观察'))
   })
 
   it('places an executable immediate signal above strong signals and marks readiness', () => {
@@ -46,10 +46,10 @@ describe('StockStrategyTags signal hierarchy', () => {
     } satisfies StockStrategyCardData
     const html = renderToStaticMarkup(<StockStrategyTags cards={[baseCard, immediate]} />)
 
-    expect(html).toContain('立即买入 1 · 推荐买入 1')
+    expect(html).toContain('异动·上涨 1 · 关注·上涨 1')
     expect(html).toContain('stock-signal-highlight buy immediate')
-    expect(html).toContain('执行条件已通过')
-    expect(html.indexOf('立即买入')).toBeLessThan(html.indexOf('推荐买入'))
+    expect(html).toContain('数据条件已通过')
+    expect(html.indexOf('异动·上涨')).toBeLessThan(html.indexOf('关注·上涨'))
   })
 
   it('demotes an expired immediate point to a strong signal in the interface', () => {
@@ -61,8 +61,8 @@ describe('StockStrategyTags signal hierarchy', () => {
     } satisfies StockStrategyCardData
     const html = renderToStaticMarkup(<StockStrategyTags cards={[expired]} />)
 
-    expect(html).toContain('推荐买入 1')
-    expect(html).not.toContain('立即买入 1')
+    expect(html).toContain('关注·上涨 1')
+    expect(html).not.toContain('异动·上涨 1')
     expect(html).toContain('当前点位已过期')
   })
 
@@ -88,9 +88,9 @@ describe('StockStrategyTags signal hierarchy', () => {
       baseCard
     ]} />)
 
-    expect(html).toContain('推荐买入 1 · 准备卖出 1 · 关注 1')
+    expect(html).toContain('关注·上涨 1 · 观察·下跌 1 · 关注 1')
     expect(html).toContain('stock-signal-highlight sell prepare')
-    expect(html).toContain('准备卖出')
+    expect(html).toContain('观察·下跌')
   })
 
   it('shows the account scope for the same instrument in separate accounts', () => {

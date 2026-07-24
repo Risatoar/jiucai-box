@@ -186,7 +186,7 @@ export function ContextPanel(props: ContextPanelProps) {
     { view: 'watchlist', tab: '行情', title: '行情详情', description: props.item ? `${props.item.name} · ${props.item.code}` : '行情、K 线和下单前检查', icon: Star, content: <div className="context-tool-body market-tool-body"><MarketInsightContent item={props.item} watchlist={props.watchlist} bars={props.bars} chartLoading={props.chartLoading} chartError={props.chartError} gates={props.gates} period={props.period} onPeriod={props.onPeriod} onSelectItem={props.onSelectItem} positions={props.positions} strategies={props.strategies} discipline={props.discipline} /></div> },
     { view: 'strategies', tab: '规则', title: '交易规则', description: `${props.strategies.filter((strategy) => strategy.status === 'active').length} 条正在使用`, icon: BrainCircuit, content: <StrategyContext strategies={props.strategies} /> },
     { view: 'automations', tab: '任务', title: '定时任务', description: `${props.automations.filter((task) => task.enabled).length} 个已开启`, icon: Clock3, content: <AutomationContext tasks={props.automations} /> },
-    { view: 'review', tab: '复盘', title: '交易复盘', description: '市场评估、热门板块与 AI 推荐复核', icon: BarChart3, content: <div className="context-tool-body"><div className="context-note"><BarChart3 size={14} /><p>复盘报告按日报、周报、月报缓存。切换日期或周期后会自动重新生成，AI 模型不可用时会保留错误提示而不是崩溃。</p></div></div> }
+    { view: 'review', tab: '复盘', title: '交易复盘', description: '市场评估、热门板块与 AI 数据复核', icon: BarChart3, content: <div className="context-tool-body"><div className="context-note"><BarChart3 size={14} /><p>复盘报告按日报、周报、月报缓存。切换日期或周期后会自动重新生成，AI 模型不可用时会保留错误提示而不是崩溃。</p></div></div> }
   ]
   const toolByView = (view: DockView) => tools.find((tool) => tool.view === view)!
   const openTool = (view: DockView) => {

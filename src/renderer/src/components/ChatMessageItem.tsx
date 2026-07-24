@@ -80,7 +80,7 @@ function ChatMessageItemComponent({
           <dl><div><dt>什么情况可以行动</dt><dd>{message.action.trigger}</dd></div><div><dt>什么情况要放弃</dt><dd>{message.action.invalidation}</dd></div><div><dt>什么时候再看</dt><dd>{message.action.nextCheck}</dd></div></dl>
         </div>
       )}
-      {message.tradeProposal && <div className="trade-confirm-card"><strong>{message.tradeProposal.side === 'buy' ? '买入' : '卖出'} {message.tradeProposal.code}</strong><span>{message.tradeProposal.quantity} 股/份/张 · 成交价 ¥{message.tradeProposal.price}</span>{message.tradeProposal.state === 'pending' ? <div><button className="primary-button" onClick={() => onResolveTrade(message.id, true)} type="button">确认已成交，更新持仓</button><button className="secondary-button" onClick={() => onResolveTrade(message.id, false)} type="button">这不是成交记录</button></div> : <em>{message.tradeProposal.state === 'recorded' ? '持仓已更新' : '已忽略，持仓没有变化'}</em>}</div>}
+      {message.tradeProposal && <div className="trade-confirm-card"><strong>{message.tradeProposal.side === 'buy' ? '买入' : '卖出'} {message.tradeProposal.code}</strong><span>{message.tradeProposal.quantity} 股/份/张 · 成交价 ¥{message.tradeProposal.price}</span><em className="trade-disclaimer">以上仅为你提供的成交记录登记，不构成投资建议。</em>{message.tradeProposal.state === 'pending' ? <div><button className="primary-button" onClick={() => onResolveTrade(message.id, true)} type="button">确认已成交，更新持仓</button><button className="secondary-button" onClick={() => onResolveTrade(message.id, false)} type="button">这不是成交记录</button></div> : <em>{message.tradeProposal.state === 'recorded' ? '持仓已更新' : '已忽略，持仓没有变化'}</em>}</div>}
     </div>
   </article>
 }

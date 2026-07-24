@@ -121,7 +121,7 @@ export function syncDefaultAutomations() {
             title: !title || title === task.id || title === task.mode
                 || (task.id === 'refine' && title === '优化交易规则') ? template.title : task.title,
             description: !description || description === '按设定时间自动检查并提醒'
-                || (task.id === 'candidate_refresh' && ['开盘期间持续扫描并动态更新可关注候选', '发掘最多5个低风险、高置信度买入观察机会，并更新AI推荐关注列表', '全市场筛选5个模型关注候选，并标出0至5个买入就绪标的', '全市场筛选0至5个合格关注候选，并标出买入就绪标的', '结合盈利目标全市场筛选0至5个合格候选，并标出买入就绪标的'].includes(description))
+                || (task.id === 'candidate_refresh' && ['开盘期间持续扫描并动态更新可关注候选', '发掘最多5个低风险、高置信度上涨观察机会，并更新AI数据关注列表', '全市场筛选5个模型关注候选，并标出0至5个上涨关注标的', '全市场筛选0至5个合格关注候选，并标出上涨关注标的', '结合盈利目标全市场筛选0至5个合格候选，并标出上涨关注标的'].includes(description))
                 || (task.id === 'intraday' && description === '持仓、关注品种或候选标的有重要变化时提醒你')
                 || (task.id === 'pre_open_refresh' && description === '开盘前更新账户、行情和关注品种')
                 || (task.id === 'rolling_backtest' && description === '持续回测20至30只标的近1个月买卖点，覆盖七类交易场景并验证80%样本外置信门槛')

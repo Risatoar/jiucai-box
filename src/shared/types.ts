@@ -92,7 +92,7 @@ export interface WatchItem extends Instrument {
   volume: string
   score: number
   source: 'user' | 'agent'
-  signal: '未评估' | '观察' | '准备买入' | '风险预警' | '今日停手'
+  signal: '未评估' | '观察' | '观察·上涨' | '准备买入' | '风险预警' | '今日停手'
   refreshedAt: string
   strategyLane?: string
   strategyLabel?: string

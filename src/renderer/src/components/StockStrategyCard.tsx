@@ -16,12 +16,12 @@ const effectiveSignal = (card: StockStrategyCardData) => immediateExpired(card)
   : card.signal
 const signalMeta = (card: StockStrategyCardData) => {
   const signal = effectiveSignal(card)
-  if (signal === 'immediate_buy') return { label: '立即买入', tone: 'buy', strength: 'immediate', priority: 4 } as const
-  if (signal === 'immediate_sell') return { label: '立即卖出', tone: 'sell', strength: 'immediate', priority: 4 } as const
-  if (signal === 'strong_buy') return { label: '推荐买入', tone: 'buy', strength: 'strong', priority: 3 } as const
-  if (signal === 'strong_sell') return { label: '推荐卖出', tone: 'sell', strength: 'strong', priority: 3 } as const
-  if (signal === 'prepare_buy') return { label: '准备买入', tone: 'buy', strength: 'prepare', priority: 2 } as const
-  if (signal === 'prepare_sell') return { label: '准备卖出', tone: 'sell', strength: 'prepare', priority: 2 } as const
+  if (signal === 'immediate_buy') return { label: '异动·上涨', tone: 'buy', strength: 'immediate', priority: 4 } as const
+  if (signal === 'immediate_sell') return { label: '异动·下跌', tone: 'sell', strength: 'immediate', priority: 4 } as const
+  if (signal === 'strong_buy') return { label: '关注·上涨', tone: 'buy', strength: 'strong', priority: 3 } as const
+  if (signal === 'strong_sell') return { label: '关注·下跌', tone: 'sell', strength: 'strong', priority: 3 } as const
+  if (signal === 'prepare_buy') return { label: '观察·上涨', tone: 'buy', strength: 'prepare', priority: 2 } as const
+  if (signal === 'prepare_sell') return { label: '观察·下跌', tone: 'sell', strength: 'prepare', priority: 2 } as const
   return { label: '关注', tone: 'watch', strength: 'watch', priority: 1 } as const
 }
 const signalClass = (card: StockStrategyCardData) => {
@@ -31,31 +31,31 @@ const signalClass = (card: StockStrategyCardData) => {
 const executionLabel = (card: StockStrategyCardData) => immediateExpired(card)
   ? '当前点位已过期'
   : card.executionStatus === 'ready'
-  ? '执行条件已通过'
+  ? '数据条件已通过'
   : card.executionStatus === 'blocked'
-    ? '暂不可执行'
+    ? '数据条件暂不满足'
     : card.executionStatus === 'review'
-      ? '等待执行复核'
+      ? '等待数据复核'
       : ''
 const signalDescription = (card: StockStrategyCardData) => {
-  if (immediateExpired(card)) return '原立即信号已超过当前点位有效期，现降为推荐级；请刷新行情和账户状态后再决定。'
+  if (immediateExpired(card)) return '原异动信号已超过当前点位有效期，现降为关注级；请刷新行情和账户状态后自行判断。'
   const signal = effectiveSignal(card)
-  if (signal === 'immediate_buy') return '当前点位、账户和执行条件均已通过，建议立即人工买入；最长5分钟有效，不会自动下单。'
-  if (signal === 'immediate_sell') return '当前点位、持仓和执行条件均已通过，建议立即人工卖出；最长5分钟有效，不会自动下单。'
-  if (signal === 'strong_buy') return '买入证据已经形成，建议优先人工复核；如仍有资金、数量或委托阻断，不要下单。'
-  if (signal === 'strong_sell') return '卖出证据已经形成，建议优先人工复核减仓或清仓；仍需核对可用数量和委托。'
-  if (signal === 'prepare_buy') return '已经进入买入准备阶段，但还缺少下一确认条件；继续等待，不要抢跑。'
-  if (signal === 'prepare_sell') return '已经进入卖出准备阶段，但退出证据尚未完全确认；先准备方案，暂不执行。'
+  if (signal === 'immediate_buy') return '当前点位、账户和数据条件均已通过，出现上涨异动；仅供观察研究，不构成买卖建议。'
+  if (signal === 'immediate_sell') return '当前点位、持仓和数据条件均已通过，出现下跌异动；仅供观察研究，不构成买卖建议。'
+  if (signal === 'strong_buy') return '上涨数据特征已经形成，建议结合自身情况独立复核；如有资金、数量或委托阻断，请自行判断。'
+  if (signal === 'strong_sell') return '下跌数据特征已经形成，建议结合自身情况独立复核；请自行核对可用数量和委托。'
+  if (signal === 'prepare_buy') return '上涨条件正在积累，但还缺少下一确认条件；继续观察，不要抢跑。'
+  if (signal === 'prepare_sell') return '下跌条件正在积累，但退出证据尚未完全确认；先观察，暂不操作。'
   return '当前证据不足，或走势仍在形成中；只观察，不进行买卖。'
 }
 const SIGNAL_LEVELS: Array<{ signal: NonNullable<StockStrategyCardData['signal']>; label: string; tone: 'buy' | 'sell' | 'watch'; advice: string }> = [
-  { signal: 'immediate_buy', label: '立即买入', tone: 'buy', advice: '当前点位和执行条件已通过，可立即人工买入' },
-  { signal: 'strong_buy', label: '推荐买入', tone: 'buy', advice: '买入证据已形成，建议优先人工复核' },
-  { signal: 'prepare_buy', label: '准备买入', tone: 'buy', advice: '进入买入准备阶段，等待下一确认条件' },
+  { signal: 'immediate_buy', label: '异动·上涨', tone: 'buy', advice: '当前数据出现上涨异动，仅供观察研究' },
+  { signal: 'strong_buy', label: '关注·上涨', tone: 'buy', advice: '上涨数据特征增多，请结合自身情况独立判断' },
+  { signal: 'prepare_buy', label: '观察·上涨', tone: 'buy', advice: '上涨条件正在积累，继续观察' },
   { signal: 'watch', label: '关注', tone: 'watch', advice: '证据不足或走势形成中，只观察不操作' },
-  { signal: 'prepare_sell', label: '准备卖出', tone: 'sell', advice: '进入卖出准备阶段，先准备方案暂不执行' },
-  { signal: 'strong_sell', label: '推荐卖出', tone: 'sell', advice: '卖出证据已形成，建议优先人工复核' },
-  { signal: 'immediate_sell', label: '立即卖出', tone: 'sell', advice: '当前点位和执行条件已通过，可立即人工卖出' }
+  { signal: 'prepare_sell', label: '观察·下跌', tone: 'sell', advice: '下跌条件正在积累，继续观察' },
+  { signal: 'strong_sell', label: '关注·下跌', tone: 'sell', advice: '下跌数据特征增多，请结合自身情况独立判断' },
+  { signal: 'immediate_sell', label: '异动·下跌', tone: 'sell', advice: '当前数据出现下跌异动，仅供观察研究' }
 ]
 
 function SignalLevelCard({ card }: { card: StockStrategyCardData }) {
@@ -76,12 +76,12 @@ function SignalLevelCard({ card }: { card: StockStrategyCardData }) {
       />)}
     </div>
     <div className="signal-level-card-legend">
-      <span className="buy">买入方向</span>
+      <span className="buy">上涨方向</span>
       <span className="watch">观察</span>
-      <span className="sell">卖出方向</span>
+      <span className="sell">下跌方向</span>
     </div>
     <div className="signal-level-card-advice">
-      <b>操作意见</b>
+      <b>数据观察</b>
       <p>{expired ? signalDescription(card) : currentLevel.advice}</p>
     </div>
   </div>
@@ -169,22 +169,23 @@ export function StockStrategyDetails({ card, onClose }: { card: StockStrategyCar
     card.stopLoss && ['失效参考', card.stopLoss]
   ].filter((item): item is string[] => Boolean(item))
 
-  return <section className="stock-strategy-details" aria-label={`${card.name}策略详情`}>
+  return <section className="stock-strategy-details" aria-label={`${card.name}数据观察详情`}>
     <header className="stock-details-head">
       <span className="stock-card-identity"><span className="asset-badge">{typeLabel(card)}</span><span><strong title={card.name}>{card.name}</strong><small title={`${card.code}${card.exchange ? ` · ${card.exchange}` : ''}${sourceLabel(card) ? ` · ${sourceLabel(card)}` : ''}`}>{card.code}{card.exchange ? ` · ${card.exchange}` : ''}{sourceLabel(card) ? ` · ${sourceLabel(card)}` : ''}</small></span></span>
       <span className="stock-card-market">{card.currentPrice && <strong>{card.currentPrice}</strong>}{card.changePercent && <small className={card.changePercent.trim().startsWith('-') ? 'down' : 'up'}>{card.changePercent}</small>}</span>
       <span className="stock-details-status"><span className={`stock-card-signal ${signalClass(card)}`} title={signalDescription(card)}>{signalMeta(card).label}</span><span className={`stock-card-stance ${stanceTone(card.stance)}`}>{card.stance}</span></span>
-      <button className="stock-details-close" aria-label={`收起${card.name}策略详情`} onClick={onClose} title="收起详情" type="button"><X size={14} /></button>
+      <button className="stock-details-close" aria-label={`收起${card.name}数据观察详情`} onClick={onClose} title="收起详情" type="button"><X size={14} /></button>
     </header>
     <StockStrategyMarket card={card} />
-    <div className="stock-card-summary"><span>AI 策略摘要</span><p title={card.summary}>{card.summary}</p><div className="stock-card-meta">{card.actionPurpose && <span className="purpose" title={`本次动作目的：${card.actionPurpose}`}>要做什么 · {card.actionPurpose}</span>}<span>买点 {card.buyPoints.length}</span><span>卖点 {card.sellPoints.length}</span><span>判断把握 {card.confidence}</span>{executionLabel(card) && <span className={`execution ${immediateExpired(card) ? 'expired' : card.executionStatus}`}>{executionLabel(card)}</span>}{card.dataAsOf && <span title={`数据 ${card.dataAsOf}`}>数据 {card.dataAsOf}</span>}</div></div>
+    <div className="stock-card-summary"><span>AI 数据摘要</span><p title={card.summary}>{card.summary}</p><div className="stock-card-meta">{card.actionPurpose && <span className="purpose" title={`本次动作目的：${card.actionPurpose}`}>要做什么 · {card.actionPurpose}</span>}<span>买点 {card.buyPoints.length}</span><span>卖点 {card.sellPoints.length}</span><span>判断把握 {card.confidence}</span>{executionLabel(card) && <span className={`execution ${immediateExpired(card) ? 'expired' : card.executionStatus}`}>{executionLabel(card)}</span>}{card.dataAsOf && <span title={`数据 ${card.dataAsOf}`}>数据 {card.dataAsOf}</span>}</div></div>
     {levels.length > 0 && <div className={`stock-levels count-${levels.length}`}>{levels.map(([label, value]) => <div key={label}><span>{label}</span><strong title={value}>{value}</strong></div>)}</div>}
-    {card.strategy && <section className="stock-card-strategy"><span>当前方案</span><p title={card.strategy}>{card.strategy}</p></section>}
+    {card.strategy && <section className="stock-card-strategy"><span>当前观察</span><p title={card.strategy}>{card.strategy}</p></section>}
     <div className="strategy-point-grid"><PointList title="条件买点" points={card.buyPoints} side="buy" /><PointList title="止盈 / 卖点" points={card.sellPoints} side="sell" /></div>
     {(card.invalidation || card.risks.length > 0 || card.executionBlockers?.length) && <section className="stock-card-risk"><header><ShieldAlert size={13} /><strong>失效与风险</strong></header>{card.invalidation && <p title={card.invalidation}>{card.invalidation}</p>}{card.executionBlockers?.length ? <ul>{card.executionBlockers.map((blocker) => <li key={`execution-${blocker}`} title={blocker}>执行阻断：{blocker}</li>)}</ul> : null}{card.risks.length > 0 && <ul>{card.risks.map((risk) => <li key={risk} title={risk}>{risk}</li>)}</ul>}</section>}
     {card.evidence.length > 0 && <section className="stock-card-evidence"><span>判断依据</span><ul>{card.evidence.map((evidence) => <li key={evidence} title={evidence}>{evidence}</li>)}</ul></section>}
     <SignalHistoryPanel code={card.code} name={card.name} />
     {card.nextCheck && <footer title={`下次检查：${card.nextCheck}`}><Clock3 size={12} /><span>下次检查：{card.nextCheck}</span></footer>}
+    <p className="stock-strategy-disclaimer">以上内容由 AI 基于公开数据自动生成，仅供学习研究和观察参考，不构成任何证券投资咨询服务或买卖建议。投资有风险，决策需谨慎。</p>
   </section>
 }
 
@@ -218,7 +219,7 @@ export function StockStrategyTags({ cards, content = '', onHandleSignal }: { car
   }, new Map<string, StockStrategyCardData[]>()))
   const accountCount = groupedCards.filter(([scope]) => scope !== 'watchlist').length
   const signalSummary = [
-    ['immediate_buy', '立即买入'], ['immediate_sell', '立即卖出'], ['strong_buy', '推荐买入'], ['strong_sell', '推荐卖出'], ['prepare_buy', '准备买入'], ['prepare_sell', '准备卖出']
+    ['immediate_buy', '异动·上涨'], ['immediate_sell', '异动·下跌'], ['strong_buy', '关注·上涨'], ['strong_sell', '关注·下跌'], ['prepare_buy', '观察·上涨'], ['prepare_sell', '观察·下跌']
   ].flatMap(([signal, label]) => {
     const count = orderedCards.filter((card) => effectiveSignal(card) === signal).length
     return count ? [`${label} ${count}`] : []
@@ -228,7 +229,7 @@ export function StockStrategyTags({ cards, content = '', onHandleSignal }: { car
   const pushMeta = [accountCount ? `${accountCount} 个账户` : '', `${orderedCards.length} 个标的`, ...signalSummary].filter(Boolean).join(' · ')
 
   return <details className="stock-strategy-disclosure" open={pushExpanded} onToggle={(event) => setPushExpanded(event.currentTarget.open)}>
-    <summary><span><strong>本次策略推送</strong><small title={pushMeta}>{pushMeta}</small></span><ChevronDown size={13} /></summary>
+    <summary><span><strong>本次数据观察推送</strong><small title={pushMeta}>{pushMeta}</small></span><ChevronDown size={13} /></summary>
     <div className="stock-strategy-tags" aria-label="本次回答涉及的标的">
     {groupedCards.map(([scope, groupCards]) => {
       const account = accountFor(scope === 'watchlist' ? undefined : scope)
@@ -242,7 +243,7 @@ export function StockStrategyTags({ cards, content = '', onHandleSignal }: { car
         </header>
         <div className="stock-strategy-group-body">
           {account && <AccountOverview group={accountGroups.get(scope)} />}
-          {actionCards.length > 0 && <div className="stock-signal-highlights" aria-label="买卖信号等级">
+          {actionCards.length > 0 && <div className="stock-signal-highlights" aria-label="数据异动等级">
             {actionCards.map((card) => <ActionSignalCard card={card} key={`signal-${cardKey(card)}`} onHandle={onHandleSignal ? () => onHandleSignal(card) : undefined} onOpen={() => setExpandedKey(cardKey(card))} />)}
           </div>}
           {normalCards.length > 0 && <div className="stock-tag-list">
@@ -256,5 +257,6 @@ export function StockStrategyTags({ cards, content = '', onHandleSignal }: { car
       </section>
     })}
     </div>
+    <p className="stock-strategy-disclaimer-footer">以上内容由 AI 基于公开数据自动生成，仅供学习研究和观察参考，不构成任何证券投资咨询服务或买卖建议。投资有风险，决策需谨慎。</p>
   </details>
 }

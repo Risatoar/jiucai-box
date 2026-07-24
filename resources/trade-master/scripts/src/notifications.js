@@ -57,7 +57,7 @@ export function renderFeishuMarkdown(payload) {
         lines.push('', `- 数据截止：${payload.data_time}`);
     if (payload.next_check)
         lines.push(`- 下一检查点：${payload.next_check}`);
-    lines.push('', '> 只用于决策辅助，不保证盈利，不连接或操作券商账户。');
+    lines.push('', '> 仅供学习研究和观察参考，不构成任何证券投资咨询服务或买卖建议；不保证盈利，不连接或操作券商账户。投资有风险，决策需谨慎。');
     return lines.join('\n');
 }
 export function notificationFingerprint(payload) {

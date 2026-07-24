@@ -29,7 +29,7 @@ const REVIEW_PROMPT = `
 你是交易复盘助手，面向 A 股交易者做每日/每周/每月市场复盘。
 必须先读取输入中的 period 和 range：daily 只总结当日，weekly 总结整个自然周区间，monthly 总结整个自然月区间。周报和月报中的板块涨跌、宽度、成交额、龙头表现都已经按区间聚合，禁止写成“今天”“当日涨跌”或复述单日结论。
 复盘分两层，必须严格分开：
-第一层是【大盘与市场】：基于全市场真实数据（市场宽度、主要指数表现、热门板块热度、全市场扫描出的强势标的），判断指数环境、挖掘当天或近期的热门板块和变更趋势、识别龙头股和热门股。这一层绝对不能看用户的持仓、关注列表、自选股或推荐候选池，只能基于全市场客观数据。
+第一层是【大盘与市场】：基于全市场真实数据（市场宽度、主要指数表现、热门板块热度、全市场扫描出的强势标的），判断指数环境、挖掘当天或近期的热门板块和变更趋势、识别龙头股和热门股。这一层绝对不能看用户的持仓、关注列表、自选股或数据候选池，只能基于全市场客观数据。
 第二层是【我的推荐复核】：复核 AI 此前推荐给用户的候选池和买卖信号，哪些验证了、哪些失效、哪些仍在观察，以及 AI 自身盲区。这一层只看用户自己的候选和信号。
 用日常中文，先说结论和下一步。不要编造数据，信息不足就写清楚。
 仅返回一个 JSON 对象，不要 Markdown。字段必须为：
@@ -121,7 +121,7 @@ const collectCandidates = async (range: ReviewDateRange): Promise<ReviewCandidat
       code,
       name: String(item.name || code),
       recommendedAt,
-      recommendation: String(item.signal || item.nextAction || 'AI 推荐关注'),
+      recommendation: String(item.signal || item.nextAction || 'AI 数据关注'),
       reason: String(item.suitableFor || item.strategyLabel || 'AI 候选池扫描'),
       referencePrice: reference,
       latestPrice: latest,
@@ -325,8 +325,8 @@ const buildDeterministicReport = (
   const { sectors, hotStocks } = buildAuthoritativeMarketSections(marketOverview)
   const aggregate = buildAggregate(candidates, signals);
   const candidateSummary = candidates.length
-    ? `本轮共复核 ${candidates.length} 个 AI 推荐候选，其中已验证 ${aggregate.candidateVerified} 个、已失效 ${aggregate.candidateFailed} 个、仍在观察 ${aggregate.candidateWatching} 个。`
-    : '本轮暂无 AI 推荐候选复核数据。';
+    ? `本轮共复核 ${candidates.length} 个 AI 数据候选，其中已验证 ${aggregate.candidateVerified} 个、已失效 ${aggregate.candidateFailed} 个、仍在观察 ${aggregate.candidateWatching} 个。`
+    : '本轮暂无 AI 数据候选复核数据。';
   const signalSummary = signals.length
     ? `本轮共复核 ${signals.length} 条买卖信号，已评价 ${aggregate.signalEvaluated} 条，信号准确率 ${fmt(aggregate.signalAccuracyPercent, '%')}。`
     : '本轮暂无买卖信号复核数据。';

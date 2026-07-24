@@ -86,7 +86,7 @@ export const parseWatchlistOpportunityAnalysis = (content: string, candidates: O
       ...candidate,
       score,
       reasons: reasons.length ? reasons : candidate.reasons,
-      signal: buyReady ? '准备买入' : '观察',
+      signal: buyReady ? '观察·上涨' : '观察',
       nextAction: nextActionFor(candidate)
     }]
   })

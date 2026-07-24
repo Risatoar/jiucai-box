@@ -109,7 +109,7 @@ export const watchlistFromSnapshot = (snapshot: TradeMasterSnapshot | null): Wat
     volume: '--',
     score: Number(item.score || 0),
     source: /agent|auto|screen/i.test(item.source || '') ? 'agent' : 'user',
-    signal: ['观察', '准备买入', '风险预警', '今日停手'].includes(item.signal || '') ? item.signal as WatchItem['signal'] : '未评估',
+    signal: ['观察', '观察·上涨', '准备买入', '风险预警', '今日停手'].includes(item.signal || '') ? (item.signal === '准备买入' ? '观察·上涨' : item.signal) as WatchItem['signal'] : '未评估',
     refreshedAt: '待刷新',
     strategyLane: item.strategyLane || item.strategy_lane,
     strategyLabel: item.strategyLabel || item.strategy_lane_label,
@@ -163,7 +163,7 @@ export const gatesFromSnapshot = (snapshot: TradeMasterSnapshot | null, item: Wa
 const taskDescriptions: Record<string, string> = {
   pre_market: '开盘前整理今天该看什么、该怎么做',
   pre_open_refresh: '开盘前更新账户、行情和关注品种',
-  candidate_refresh: '全市场筛选五类策略各2只，共10只候选，并单独标出买入就绪标的',
+  candidate_refresh: '全市场筛选五类策略各2只，共10只候选，并单独标出上涨关注标的',
   intraday: '持仓、关注品种或候选标的有重要变化时提醒你',
   voc_monitor: '高频检查重点博主更新，提取板块与买卖情绪并提示风险',
   midday_review: '总结上午盘面，并整理下午的操作重点',

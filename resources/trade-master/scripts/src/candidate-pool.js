@@ -115,7 +115,7 @@ function syncAiRecommendations(watchlist, candidates) {
             ...instrument,
             score: candidate.score,
             reasons: candidate.reasons,
-            signal: candidate.status === 'buy_ready' ? '准备买入' : '观察',
+            signal: candidate.status === 'buy_ready' ? '观察·上涨' : '观察',
             strategyLane: candidate.strategy_lane,
             strategyLabel: candidate.strategy_lane_label,
             suitableFor: candidate.suitable_for,
@@ -307,12 +307,12 @@ export async function refreshCandidatePool(market, asOf = new Date().toISOString
             mode: options.screeningOnly ? 'asset_specific_ai_review_shortlist' : 'candidate_model_v2',
             requirement: options.screeningOnly
                 ? '按画像允许的品种分别做横截面初筛最多45个，之后补充日线风险与5/15分钟证据'
-                : '成功结果固定5只且代码不重复：五类策略各1只；严格门槛不足时只允许观察级补位，不能自动变成买入就绪',
+                : '成功结果固定5只且代码不重复：五类策略各1只；严格门槛不足时只允许观察级补位，不能自动变成上涨关注',
         },
         disclaimer: options.screeningOnly
             ? '这是交给深度分析的模型初筛，不是买入信号。'
             : strategyBasketsComplete
-                ? '五类策略各1只，共5只；真正买入就绪仍允许为0。打板候选只是高风险观察，不是追涨或自动买入指令。'
+                ? '五类策略各1只，共5只；真正上涨关注仍允许为0。打板候选只是高风险观察，不是追涨或自动操作指令。'
                 : `五策略篮子只形成 ${candidates.length}/5 个候选，本轮不替换原关注列表。`,
     };
     writeJson(join(tradeMasterHome(), 'runtime', 'candidate-pool.json'), pool);
@@ -385,7 +385,7 @@ export async function monitorCandidatePool(market, limit = 12) {
             ? '模型与实时入场条件均已满足，仍须人工核对账户、纪律、费用和现金安全垫'
             : candidate.selection_tier === 'fallback'
                 ? '属于观察级补位，仅满足该策略的基础特征，尚未达到严格关注门槛和买入条件'
-                : '模型关注门槛通过，但尚未达到买入就绪条件',
+                : '模型关注门槛通过，但尚未达到上涨关注条件',
         data_as_of: candidate.validation?.data_as_of,
     }));
     const rejected = reranked.rejectedCandidates.map((candidate) => ({

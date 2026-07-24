@@ -188,7 +188,7 @@ export function assessFundamentalContext(type, instrumentInfo) {
             status: complete ? 'verified' : 'incomplete',
             score: complete ? 65 : 45,
             buy_ready_eligible: complete,
-            risks: complete ? [] : ['缺少转股溢价率、剩余规模或强赎状态，只能进入观察，不能标记买入就绪'],
+            risks: complete ? [] : ['缺少转股溢价率、剩余规模或强赎状态，只能进入观察，不能标记上涨关注'],
             event_risk_status: complete ? 'provider_checked' : 'manual_check_required',
         };
     }
@@ -197,7 +197,7 @@ export function assessFundamentalContext(type, instrumentInfo) {
             status: 'unavailable',
             score: 45,
             buy_ready_eligible: false,
-            risks: ['股票估值与市值数据不可用，只能进入观察，不能标记买入就绪'],
+            risks: ['股票估值与市值数据不可用，只能进入观察，不能标记上涨关注'],
             event_risk_status: 'manual_check_required',
         };
     }

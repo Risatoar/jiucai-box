@@ -275,3 +275,8 @@ body.is-resizing-pane, body.is-resizing-pane * { cursor: col-resize !important; 
   .ai-trade-points { grid-template-columns: 1fr; }.ai-trade-points > div + div { border-top: 1px solid var(--border-soft); border-left: 0; }
   .ai-condition-grid { grid-template-columns: 1fr; gap: 12px; }
 }
+
+/* ===== 全局免责条 ===== */
+.disclaimer-bar { flex: 0 0 auto; min-height: 30px; padding: 0 12px; display: flex; align-items: center; gap: 7px; background: #fdf6e3; border-bottom: 1px solid #f0e0b0; color: #7a5a18; font-size: 11px; line-height: 1.4; }
+.disclaimer-bar svg { flex: none; color: #b8860b; }
+.disclaimer-bar span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

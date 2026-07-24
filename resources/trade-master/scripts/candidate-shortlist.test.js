@@ -49,15 +49,59 @@ describe('global candidate shortlist', () => {
             item('600021', 'stock', 87, 7.2, 4.6, { change_percent: 9.8, leadership_assessment: { score: 92 }, validation: { checks: { chasing_risk: true, five_minute_structure: true }, technical_evidence: { daily: { realized_volatility_20d_percent: 4.6, above_ma20: true, ma5: 11, ma20: 10, ma20_slope_5d_percent: 1, return_20d_percent: 8 }, market_context: { continuity: { mainline_score: 20 } } } } }),
             item('600022', 'stock', 86, 7.0, 4.5, { change_percent: 10.2, leadership_assessment: { score: 90 }, validation: { checks: { chasing_risk: true, fifteen_minute_structure: true }, technical_evidence: { daily: { realized_volatility_20d_percent: 4.5, above_ma20: true, ma5: 11, ma20: 10, ma20_slope_5d_percent: 1, return_20d_percent: 8 }, market_context: { continuity: { mainline_score: 20 } } } } }),
         ];
-        const selected = selectCandidateMix(items, 10, { risk_score: 75 });
+        const selected = selectCandidateMix(items, 10, { risk_score: 50 });
         expect(selected).toHaveLength(10);
         expect(new Set(selected.map((candidate) => candidate.instrument.code))).toHaveProperty('size', 10);
         expect(selected.map((candidate) => candidate.strategy_lane)).toEqual([
             'steady', 'steady', 'short_3d', 'short_3d', 'medium_long',
             'medium_long', 'hot_leader', 'hot_leader', 'limit_up', 'limit_up',
         ]);
-        expect(classifyCandidateTempo(items[0], { risk_score: 75 }).classification).toBe('low_volatility');
+        expect(classifyCandidateTempo(items[0], { risk_score: 50 }).classification).toBe('low_volatility');
         expect(selected.filter((candidate) => candidate.strategy_lane === 'limit_up').every((candidate) => candidate.validation.checks.chasing_risk)).toBe(true);
+    });
+
+    it('aggressive profile gets zero low-volatility steady candidates and shifts quota to high-volatility baskets', () => {
+        const item = (code, type, score, amplitude, volatility, overrides = {}) => ({
+            type,
+            instrument: { code },
+            ranking_score: score,
+            amplitude_percent: amplitude,
+            change_percent: 2,
+            strategy_type: 'trend',
+            component_scores: { risk: 75, daily: 72, intraday: 70, screening: 76, cost_efficiency: 70, fundamental_quality: 70 },
+            fundamental_assessment: { score: 70 },
+            leadership_assessment: { score: 60 },
+            validation: {
+                checks: { chasing_risk: false, five_minute_structure: false, fifteen_minute_structure: false },
+                technical_evidence: {
+                    daily: { realized_volatility_20d_percent: volatility, above_ma20: true, ma5: 11, ma20: 10, ma20_slope_5d_percent: 1, return_20d_percent: 8 },
+                    market_context: { continuity: { mainline_score: 20 } },
+                },
+            },
+            ...overrides,
+        });
+        const items = [
+            item('600031', 'stock', 95, 7.0, 4.2, { change_percent: 8.5, leadership_assessment: { score: 88 }, validation: { checks: { chasing_risk: false, five_minute_structure: true }, technical_evidence: { daily: { realized_volatility_20d_percent: 4.2, above_ma20: true, ma5: 11, ma20: 10, ma20_slope_5d_percent: 1, return_20d_percent: 8 }, market_context: { continuity: { mainline_score: 70 } } } } }),
+            item('600032', 'stock', 94, 6.8, 4.0, { change_percent: 7.8, leadership_assessment: { score: 86 }, validation: { checks: { chasing_risk: false, fifteen_minute_structure: true }, technical_evidence: { daily: { realized_volatility_20d_percent: 4.0, above_ma20: true, ma5: 11, ma20: 10, ma20_slope_5d_percent: 1, return_20d_percent: 8 }, market_context: { continuity: { mainline_score: 68 } } } } }),
+            item('113001', 'cbond', 93, 7.5, 4.5, { validation: { checks: { chasing_risk: false, five_minute_structure: true }, technical_evidence: { daily: { realized_volatility_20d_percent: 4.5, above_ma20: true, ma5: 11, ma20: 10, ma20_slope_5d_percent: 1, return_20d_percent: 8 }, market_context: { continuity: { mainline_score: 20 } } } } }),
+            item('113002', 'cbond', 92, 7.2, 4.3, { validation: { checks: { chasing_risk: false, fifteen_minute_structure: true }, technical_evidence: { daily: { realized_volatility_20d_percent: 4.3, above_ma20: true, ma5: 11, ma20: 10, ma20_slope_5d_percent: 1, return_20d_percent: 8 }, market_context: { continuity: { mainline_score: 20 } } } } }),
+            item('600011', 'stock', 91, 5.5, 3.4),
+            item('600012', 'stock', 90, 5.6, 3.5),
+            item('510011', 'etf', 89, 4.8, 3.5, { leadership_assessment: { score: 90 }, validation: { checks: { chasing_risk: false }, technical_evidence: { daily: { realized_volatility_20d_percent: 3.5, above_ma20: true, ma5: 11, ma20: 10, ma20_slope_5d_percent: 1, return_20d_percent: 8 }, market_context: { continuity: { mainline_score: 80 } } } } }),
+            item('510012', 'etf', 88, 4.7, 3.4, { leadership_assessment: { score: 88 }, validation: { checks: { chasing_risk: false }, technical_evidence: { daily: { realized_volatility_20d_percent: 3.4, above_ma20: true, ma5: 11, ma20: 10, ma20_slope_5d_percent: 1, return_20d_percent: 8 }, market_context: { continuity: { mainline_score: 78 } } } } }),
+            item('600021', 'stock', 87, 7.2, 4.6, { change_percent: 9.8, leadership_assessment: { score: 92 }, validation: { checks: { chasing_risk: true, five_minute_structure: true }, technical_evidence: { daily: { realized_volatility_20d_percent: 4.6, above_ma20: true, ma5: 11, ma20: 10, ma20_slope_5d_percent: 1, return_20d_percent: 8 }, market_context: { continuity: { mainline_score: 20 } } } } }),
+            item('600022', 'stock', 86, 7.0, 4.5, { change_percent: 10.2, leadership_assessment: { score: 90 }, validation: { checks: { chasing_risk: true, fifteen_minute_structure: true }, technical_evidence: { daily: { realized_volatility_20d_percent: 4.5, above_ma20: true, ma5: 11, ma20: 10, ma20_slope_5d_percent: 1, return_20d_percent: 8 }, market_context: { continuity: { mainline_score: 20 } } } } }),
+        ];
+        const selected = selectCandidateMix(items, 10, { risk_score: 75 });
+        expect(selected).toHaveLength(10);
+        expect(new Set(selected.map((candidate) => candidate.instrument.code))).toHaveProperty('size', 10);
+        expect(selected.filter((candidate) => candidate.strategy_lane === 'steady')).toHaveLength(0);
+        const laneCounts = selected.reduce((acc, candidate) => {
+            acc[candidate.strategy_lane] = (acc[candidate.strategy_lane] || 0) + 1;
+            return acc;
+        }, {});
+        expect(laneCounts.limit_up).toBeGreaterThanOrEqual(3);
+        expect(laneCounts.hot_leader).toBeGreaterThanOrEqual(3);
     });
 
     it('fills scarce baskets with explicitly marked observation-tier candidates', () => {
