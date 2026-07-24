@@ -83,8 +83,21 @@ describe('SettingsView 交易状态', () => {
 describe('SettingsView AI 设置', () => {
   it('shows a configurable model timeout with the 120 second default', () => {
     const html = renderSettings(false, false, 'ai')
+    expect(html).toContain('模型提供方')
+    expect(html).toContain('本地 Codex')
+    expect(html).toContain('API 接入')
+    expect(html).toContain('AI 使用模型')
+    expect(html).toContain('重新读取')
     expect(html).toContain('模型响应超时（秒）')
     expect(html).toContain('value="120"')
     expect(html).toContain('默认 120 秒')
+  })
+
+  it('keeps API connection fields separate from the local Codex model', () => {
+    const html = renderSettings(false, false, 'ai', { provider: 'openai-compatible', baseUrl: 'https://api.example.com/v1', model: 'api-model', codexModel: 'codex-model', timeoutSeconds: 120 })
+    expect(html).toContain('API 地址')
+    expect(html).toContain('模型 ID')
+    expect(html).toContain('访问密钥（API Key）')
+    expect(html).not.toContain('AI 使用模型')
   })
 })

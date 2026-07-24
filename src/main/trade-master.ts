@@ -74,16 +74,17 @@ export const loadTradeMasterSnapshot = async (): Promise<TradeMasterSnapshot> =>
   } catch (error) {
     snapshot.errors.push(`strategies/candidates: ${error instanceof Error ? error.message : String(error)}`)
   }
-  const readDirectory = async (relative: string) => {
+  const readDirectory = async (relative: string, limit?: number) => {
     try {
       const root = join(home, relative)
       const files = (await readdir(root)).filter((file) => file.endsWith('.json')).sort().reverse()
-      return await Promise.all(files.map((file) => readJson(join(root, file))))
+      const selectedFiles = limit == null ? files : files.slice(0, limit)
+      return await Promise.all(selectedFiles.map((file) => readJson(join(root, file))))
     } catch { return [] }
   }
   snapshot.strategyVersions = await readDirectory('strategies/versions')
   snapshot.pausedStrategies = await readDirectory('strategies/paused')
-  snapshot.automationRuns = (await readDirectory('automation/runs')).slice(0, 50)
+  snapshot.automationRuns = await readDirectory('automation/runs', 50)
   try { snapshot.notificationAudit = await readJson(join(home, 'notifications/audit.json')) }
   catch { snapshot.notificationAudit = null }
   return snapshot
@@ -103,10 +104,37 @@ const ALLOWED_COMMANDS = new Set([
   'init', 'doctor', 'market', 'cache', 'plan', 'replay', 'screen', 'portfolio',
   'candidate', 'watchlist', 'goal', 'analyze', 'automation', 'notify', 'refine', 'evolve'
 ])
+const MAX_CONCURRENT_COMMANDS = 4
+const MAX_COMMAND_OUTPUT_BYTES = 32 * 1024 * 1024
+const commandQueue: Array<() => void> = []
+const sharedMarketCommands = new Map<string, Promise<string>>()
+let activeCommands = 0
 
-export const runTradeMaster = async (command: string, args: string[] = []): Promise<string> => {
-  if (!ALLOWED_COMMANDS.has(command)) throw new Error(`不允许执行命令：${command}`)
-  if (args.some((arg) => arg.includes('\0') || arg.length > 500)) throw new Error('参数不合法')
+const withCommandSlot = <T>(task: () => Promise<T>): Promise<T> => new Promise((resolve, reject) => {
+  const start = () => {
+    activeCommands += 1
+    void task().then(resolve, reject).finally(() => {
+      activeCommands -= 1
+      commandQueue.shift()?.()
+    })
+  }
+  if (activeCommands < MAX_CONCURRENT_COMMANDS) start()
+  else commandQueue.push(start)
+})
+
+const stopTradeMasterChild = (child: ReturnType<typeof spawn>) => {
+  try {
+    if (process.platform === 'win32') child.kill('SIGTERM')
+    else process.kill(-child.pid!, 'SIGTERM')
+  } catch { child.kill('SIGTERM') }
+}
+
+const commandTimeoutMs = (command: string, args: string[]) =>
+  command === 'candidate' && args[0] === 'refresh' ? 4 * 60_000
+    : ['replay', 'screen'].includes(command) ? 3 * 60_000
+      : 2 * 60_000
+
+const executeTradeMaster = async (command: string, args: string[]): Promise<string> => {
   const skill = await locateTradeMasterSkill()
   const cli = join(skill, 'scripts/dist/cli.js')
   return new Promise((resolve, reject) => {
@@ -116,13 +144,52 @@ export const runTradeMaster = async (command: string, args: string[] = []): Prom
         ELECTRON_RUN_AS_NODE: '1',
         TRADE_MASTER_HOME: process.env.TRADE_MASTER_HOME || join(homedir(), '.trade-master')
       },
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32'
     })
     let stdout = ''
     let stderr = ''
-    child.stdout.on('data', (data) => { stdout += String(data) })
-    child.stderr.on('data', (data) => { stderr += String(data) })
-    child.on('error', reject)
-    child.on('close', (code) => code === 0 ? resolve(stdout.trim()) : reject(new Error(stderr || `Trade Master 退出码 ${code}`)))
+    let outputBytes = 0
+    let settled = false
+    const finish = (callback: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      callback()
+    }
+    const appendOutput = (target: 'stdout' | 'stderr', data: Buffer) => {
+      outputBytes += data.byteLength
+      if (outputBytes > MAX_COMMAND_OUTPUT_BYTES) {
+        stopTradeMasterChild(child)
+        finish(() => reject(new Error('Trade Master 输出超过安全上限，已停止本次任务')))
+        return
+      }
+      if (target === 'stdout') stdout += String(data)
+      else stderr += String(data)
+    }
+    const timer = setTimeout(() => {
+      stopTradeMasterChild(child)
+      finish(() => reject(new Error(`Trade Master 执行超过 ${Math.round(commandTimeoutMs(command, args) / 1000)} 秒，已停止本次任务`)))
+    }, commandTimeoutMs(command, args))
+    child.stdout.on('data', (data: Buffer) => appendOutput('stdout', data))
+    child.stderr.on('data', (data: Buffer) => appendOutput('stderr', data))
+    child.on('error', (error) => finish(() => reject(error)))
+    child.on('close', (code) => finish(() => code === 0 ? resolve(stdout.trim()) : reject(new Error(stderr || `Trade Master 退出码 ${code}`))))
   })
+}
+
+export const runTradeMaster = async (command: string, args: string[] = []): Promise<string> => {
+  if (!ALLOWED_COMMANDS.has(command)) throw new Error(`不允许执行命令：${command}`)
+  if (args.some((arg) => arg.includes('\0') || arg.length > 500)) throw new Error('参数不合法')
+  const sharedKey = command === 'market' ? JSON.stringify([command, args]) : ''
+  if (sharedKey) {
+    const existing = sharedMarketCommands.get(sharedKey)
+    if (existing) return existing
+  }
+  const running = withCommandSlot(() => executeTradeMaster(command, args))
+  if (sharedKey) {
+    sharedMarketCommands.set(sharedKey, running)
+    void running.then(() => sharedMarketCommands.delete(sharedKey), () => sharedMarketCommands.delete(sharedKey))
+  }
+  return running
 }

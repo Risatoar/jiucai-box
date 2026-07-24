@@ -5,6 +5,7 @@ import { analyzeEvidence } from './analysis.js';
 import { planAutomation, syncDefaultAutomations } from './automation.js';
 import { monitorCandidatePool, refreshCandidatePool } from './candidate-pool.js';
 import { candidateModelStatus } from './candidate-model-status.js';
+import { CachedMarketService } from './cached-market.js';
 import { screenConvertibleBonds } from './cbond-screener.js';
 import { buildTodayPlan } from './daily-plan.js';
 import { evaluateGoal } from './goal.js';
@@ -13,8 +14,9 @@ import { MarketService } from './market.js';
 import { migrateLegacyMmm } from './migrate.js';
 import { configureFeishu, notificationStatus, sendFeishuNotification } from './notifications.js';
 import { createProviders } from './providers.js';
-import { monitorAndRollback, validateAndPromote } from './refinement.js';
+import { monitorAndRollback, validateAndPromote, validateLatestCandidate } from './refinement.js';
 import { replayPoints } from './replay.js';
+import { latestRollingBacktest, runRollingBacktest } from './rolling-backtest.js';
 import { saveReport } from './reports.js';
 import { initializeStore, loadConfig, loadPortfolio, loadProviders, readJson, tradeMasterHome, writeJson } from './storage.js';
 import { watchlistStatus } from './watchlist.js';
@@ -71,12 +73,18 @@ async function main() {
             print(await market.info(requireValue('--code')));
         else if (subcommand === 'quote')
             print(await market.quotes(requireValue('--code')));
+        else if (subcommand === 'quotes')
+            print(await market.quotesMany(requireValue('--codes').split(','), integer('--concurrency', 6)));
         else if (subcommand === 'universe')
             print(await market.universe((value('--type') ?? 'cbond')));
+        else if (subcommand === 'sectors')
+            print(await market.sectors());
+        else if (subcommand === 'sector-period')
+            print(await market.sectorPeriod(requireValue('--start'), requireValue('--end')));
         else if (subcommand === 'bars')
             print(await market.bars(requireValue('--code'), (value('--period') ?? '1d'), integer('--limit', 180), { start: value('--start'), end: value('--end'), asOf: value('--as-of') }));
         else
-            throw new Error('market 支持 search、info、quote、universe、bars');
+            throw new Error('market 支持 search、info、quote、quotes、universe、sectors、sector-period、bars');
         return;
     }
     if (command === 'cache') {
@@ -113,6 +121,43 @@ async function main() {
         print({ ...report, saved });
         return;
     }
+    if (command === 'backtest') {
+        if (subcommand === 'rolling') {
+            const codes = (value('--codes') ?? '').split(',').map((item) => item.trim()).filter(Boolean);
+            const market = value('--offline-cache')
+                ? new CachedMarketService(resolve(requireValue('--offline-cache')))
+                : service();
+            const report = await runRollingBacktest(market, {
+                asOf: value('--as-of') ?? new Date().toISOString(),
+                days: integer('--days', 30),
+                limit: integer('--limit', 25),
+                horizon: integer('--horizon', 3),
+                minimumTradingDays: value('--minimum-trading-days') ? integer('--minimum-trading-days', 15) : undefined,
+                evidenceTag: value('--evidence-tag'),
+                researchOnly: has('--research-only'),
+                codes,
+            });
+            print(has('--full') ? report : {
+                schema_version: report.schema_version,
+                mode: report.mode,
+                generated_at: report.generated_at,
+                as_of: report.as_of,
+                window_days: report.window_days,
+                horizon: report.horizon,
+                no_lookahead: report.no_lookahead,
+                universe: report.universe,
+                split: report.split,
+                metrics: report.metrics,
+                promotion: report.promotion,
+                saved: report.saved,
+            });
+        }
+        else if (subcommand === 'status')
+            print(latestRollingBacktest());
+        else
+            throw new Error('backtest 支持 rolling、status');
+        return;
+    }
     if (command === 'screen' && subcommand === 'cbond') {
         const asOf = requireValue('--as-of');
         const report = await screenConvertibleBonds(service(), asOf, {
@@ -127,7 +172,7 @@ async function main() {
     if (command === 'candidate') {
         const market = service();
         if (subcommand === 'refresh')
-            print(await refreshCandidatePool(market, value('--as-of') ?? new Date().toISOString(), { maxCandidates: integer('--limit', has('--screening-only') ? 20 : 5), screeningOnly: has('--screening-only'), syncWatchlist: !has('--no-sync') }));
+            print(await refreshCandidatePool(market, value('--as-of') ?? new Date().toISOString(), { maxCandidates: integer('--limit', has('--screening-only') ? 45 : 10), screeningOnly: has('--screening-only'), syncWatchlist: !has('--no-sync') }));
         else if (subcommand === 'monitor')
             print(await monitorCandidatePool(market, integer('--limit', 12)));
         else if (subcommand === 'model-status')
@@ -213,10 +258,12 @@ async function main() {
     if (command === 'refine') {
         if (value('--candidate'))
             print(validateAndPromote(readJson(resolve(requireValue('--candidate')))));
+        else if (has('--latest'))
+            print(validateLatestCandidate());
         else if (value('--monitor'))
             print(monitorAndRollback(readJson(resolve(requireValue('--monitor')))));
         else
-            throw new Error('refine 需要 --candidate 或 --monitor');
+            throw new Error('refine 需要 --candidate、--latest 或 --monitor');
         return;
     }
     if (command === 'evolve') {
@@ -230,7 +277,7 @@ async function main() {
             throw new Error('evolve 支持 --candidate、--monitor 或 status');
         return;
     }
-    throw new Error('用法：trade-master <init|doctor|market|cache|plan|replay|screen|candidate|portfolio|watchlist|notify|goal|analyze|automation|migrate|refine|evolve>');
+    throw new Error('用法：trade-master <init|doctor|market|cache|plan|replay|backtest|screen|candidate|portfolio|watchlist|notify|goal|analyze|automation|migrate|refine|evolve>');
 }
 main().catch((error) => {
     process.stderr.write(`${JSON.stringify({ error: error instanceof Error ? error.message : String(error) })}\n`);

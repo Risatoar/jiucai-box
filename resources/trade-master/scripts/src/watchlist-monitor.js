@@ -1,5 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { analyzePlanTarget, collectLastSellContexts, shanghaiDate } from './daily-plan.js';
+import { loadIntradayDecisionPolicy } from './strategy-policy.js';
 import { loadPortfolio, readJson, tradeMasterHome, writeJson } from './storage.js';
 
 const CLOSED = new Set(['closed', 'closed_case', 'removed', 'archived']);
@@ -9,18 +11,6 @@ const finite = (value, fallback = 0) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
 };
-
-const round = (value, digits = 2) => {
-    const scale = 10 ** digits;
-    return Math.round(finite(value) * scale) / scale;
-};
-
-const average = (values) => {
-    const usable = values.filter(Number.isFinite);
-    return usable.length ? usable.reduce((sum, value) => sum + value, 0) / usable.length : null;
-};
-
-const closedBars = (result) => (result?.bars ?? []).filter((bar) => bar.closed !== false);
 
 const activeWatchItems = (watchlist, portfolio, household) => {
     const heldCodes = new Set((portfolio.positions ?? [])
@@ -56,59 +46,33 @@ const activeWatchItems = (watchlist, portfolio, household) => {
     return { active, heldExcluded, inactiveExcluded };
 };
 
-const dailyStructure = (bars) => {
-    const closes = bars.map((bar) => finite(bar.close, NaN)).filter(Number.isFinite);
-    const close = closes.at(-1) ?? null;
-    const ma5 = average(closes.slice(-5));
-    const ma20 = average(closes.slice(-20));
-    return {
-        sample_count: closes.length,
-        close,
-        ma5: ma5 == null ? null : round(ma5, 4),
-        ma20: ma20 == null ? null : round(ma20, 4),
-        above_ma20: close != null && ma20 != null ? close >= ma20 : null,
-        aligned: closes.length >= 20 && close != null && ma5 != null && ma20 != null && close >= ma20 && ma5 >= ma20,
-    };
-};
+const isReentryCandidate = (item) => item.relation === 'confirmed_holding_monitor'
+    || String(item.source ?? '').includes('holding')
+    || Number(item.monitoring_plan?.observed_quantity_reduction_since_previous_snapshot) > 0;
 
-const chasingRisk = (item, quote) => {
-    const change = finite(quote?.changeRatio);
-    const threshold = item.type === 'cbond' ? 0.07 : item.type === 'etf' ? 0.035 : 0.045;
-    const nearHigh = finite(quote?.high) > 0 && (finite(quote.high) - finite(quote.price)) / finite(quote.high) < 0.005;
-    return change > threshold || (nearHigh && change > (item.type === 'cbond' ? 0.05 : 0.03));
-};
-
-const monitorItem = async (market, item) => {
+const monitorItem = async (market, item, asOf, decisionPolicy, lastSellContext) => {
     try {
-        const [evidence5, result15, resultDaily] = await Promise.all([
-            market.evidence(item.code, '5m', 24),
-            market.bars(item.code, '15m', 16),
-            market.bars(item.code, '1d', 40),
-        ]);
-        const bars5 = closedBars(evidence5);
-        const bars15 = closedBars(result15);
-        const daily = dailyStructure(closedBars(resultDaily));
-        const last5 = bars5.at(-1);
-        const previous5 = bars5.at(-2);
-        const last15 = bars15.at(-1);
-        const previous15 = bars15.at(-2);
-        const quote = evidence5.quotes?.[0] ?? null;
-        const recentVolumes = bars5.slice(-6, -1).map((bar) => finite(bar.volume, NaN)).filter((value) => value > 0);
-        const averageVolume = average(recentVolumes);
-        const volumeRatio = last5 && averageVolume ? finite(last5.volume) / averageVolume : null;
-        const fiveMinute = Boolean(last5 && previous5 && finite(last5.close) > finite(last5.open) && finite(last5.close) > finite(previous5.close));
-        const fifteenMinute = Boolean(last15 && previous15 && finite(last15.close) >= finite(last15.open) && finite(last15.close) >= finite(previous15.close));
-        const volume = volumeRatio != null && volumeRatio >= 1.05;
-        const chasing = chasingRisk(item, quote);
-        const verified = evidence5.market_state?.verified === true && bars5.length >= 2 && bars15.length >= 2;
-        const ready = verified && daily.aligned && fiveMinute && fifteenMinute && volume && !chasing;
+        const analysis = await analyzePlanTarget(
+            market,
+            { instrument: item, position: null, accountScope: null, positionSource: 'watchlist' },
+            shanghaiDate(new Date(asOf)),
+            asOf,
+            decisionPolicy,
+            lastSellContext,
+        );
+        const guidance = analysis.position_guidance;
+        const trigger = analysis.latest_signals.find((signal) => signal.id === guidance?.trigger_signal_id);
+        const verified = analysis.market_state?.intraday_bars > 0 && analysis.errors.length === 0;
+        const reentryCandidate = isReentryCandidate(item);
+        const ready = verified
+            && guidance?.state === 'entry_ready'
+            && guidance.material_change === true
+            && trigger?.side === 'buy'
+            && trigger.kState === 'closed'
+            && trigger.level === 'actionable';
         const blockers = [
             !verified && '实时行情或闭合K线未通过验证',
-            !daily.aligned && '日线趋势未站稳20日均线',
-            !fiveMinute && '5分钟买点结构未确认',
-            !fifteenMinute && '15分钟买点结构未确认',
-            !volume && '独立量能证据不足',
-            chasing && '涨幅或位置过高，存在追涨风险',
+            !ready && guidance?.action,
         ].filter(Boolean);
         return {
             instrument: { code: item.code, name: item.name, type: item.type, exchange: item.exchange },
@@ -116,22 +80,32 @@ const monitorItem = async (market, item) => {
             source_scope: item.source_scope,
             status: ready ? 'buy_ready' : 'watching',
             signal_strength: ready ? 'strong' : 'none',
-            price: quote?.price ?? null,
-            change_percent: round(finite(quote?.changeRatio) * 100),
+            opportunity_type: ready && reentryCandidate ? 'reentry_after_risk_reduction' : ready ? 'new_entry' : reentryCandidate ? 'reentry_watch' : 'watch',
+            price: analysis.quote?.price ?? null,
+            change_percent: finite(analysis.quote?.changeRatio) * 100,
             checks: {
                 quote_and_closed_bars_verified: verified,
-                daily_trend_aligned: daily.aligned,
-                five_minute_structure: fiveMinute,
-                fifteen_minute_structure: fifteenMinute,
-                independent_volume: volume,
-                chasing_risk: chasing,
+                unified_model_entry_ready: ready,
+                trigger_closed: trigger?.kState === 'closed',
+                trigger_actionable: trigger?.level === 'actionable',
+                reentry_candidate: reentryCandidate,
             },
-            technical_evidence: { daily, latest_volume_vs_recent_average: volumeRatio == null ? null : round(volumeRatio) },
-            trigger: ready ? '日线趋势、闭合5/15分钟结构和独立量能同时确认' : '继续等待全部买点条件同时确认',
-            invalidation: daily.ma20 == null ? '行情证据不足时不做判断' : `跌破20日均线 ${daily.ma20} 或短周期闭合结构转弱`,
+            model_evidence: {
+                decision_policy_id: analysis.market_state?.decision_policy_id,
+                daily_trend: analysis.market_state?.daily_trend,
+                position_guidance: guidance,
+                trigger_signal: trigger ?? null,
+                downside_risk: analysis.downside_risk,
+            },
+            trigger: trigger?.reasons?.join('；') ?? guidance?.action ?? '继续等待统一模型确认买点',
+            invalidation: trigger?.invalidation ?? '行情证据不足时不做判断',
             blockers,
-            conclusion: ready ? '出现高质量技术买点，仍须人工核对账户、纪律、费用和现金安全垫' : '继续观察，不构成买入信号',
-            data_as_of: evidence5.market_state?.latest_exchange_time ?? null,
+            conclusion: ready && reentryCandidate
+                ? '原卖出逻辑已明显减弱，出现重新买回候选；仍须人工核对账户、费用和风险预算'
+                : ready
+                    ? '统一买卖点模型确认买点，仍须人工核对账户、纪律、费用和现金安全垫'
+                    : '继续观察，不构成买入信号',
+            data_as_of: analysis.market_state?.latest_bar ?? null,
         };
     }
     catch (error) {
@@ -175,7 +149,17 @@ export async function monitorWatchlistBuyPoints(market, limit = Number.MAX_SAFE_
     const previous = safeRead('runtime/watchlist-monitor-latest.json', null);
     const selected = activeWatchItems(watchlist, portfolio, household);
     const requested = selected.active.slice(0, limit);
-    const items = await mapLimit(requested, 4, (item) => monitorItem(market, item));
+    const asOf = new Date().toISOString();
+    const decisionPolicy = loadIntradayDecisionPolicy();
+    const ledger = safeRead('signals/ledger.json', { records: [] });
+    const lastSellContexts = collectLastSellContexts(ledger.records ?? []);
+    const items = await mapLimit(requested, 4, (item) => monitorItem(
+        market,
+        item,
+        asOf,
+        decisionPolicy,
+        lastSellContexts.get(`${item.code}|`) ?? null,
+    ));
     const previousItems = previous?.schema_version === 2 ? previous.items ?? [] : [];
     const previousByCode = new Map(previousItems.map((item) => [item.instrument?.code, item.status]));
     const newlyReady = items.filter((item) => item.status === 'buy_ready' && previousByCode.get(item.instrument.code) !== 'buy_ready');
@@ -188,7 +172,8 @@ export async function monitorWatchlistBuyPoints(market, limit = Number.MAX_SAFE_
         schema_version: 2,
         mode: 'watchlist_buy_point_monitor',
         generated_at: new Date().toISOString(),
-        scope: '只监控非持仓自选的买点；持仓买卖策略由持仓通道处理',
+        scope: '持仓与非持仓自选均使用同一套活动买卖点模型；本通道只负责非持仓买点去重提醒',
+        decision_policy_id: decisionPolicy.id,
         entry_gate: ['STOPPED', 'COOLDOWN'].includes(discipline.state) ? 'blocked_by_discipline' : 'manual_confirmation_required',
         summary: {
             active_total: selected.active.length,

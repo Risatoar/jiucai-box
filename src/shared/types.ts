@@ -1,9 +1,14 @@
+import type { StockStrategyCardData, TradeRecordInput } from './stock-strategy-types'
+
 export type * from './integration-types'
+export type * from './stock-strategy-types'
 export type * from './voc'
+export type * from './review-types'
 
 export type InstrumentType = 'stock' | 'etf' | 'cbond'
+export type StockBoard = 'main_sh' | 'main_sz' | 'chinext' | 'star'
 export type GateState = 'pass' | 'warn' | 'blocked'
-export type AppView = 'chat' | 'portfolio' | 'watchlist' | 'voc' | 'strategies' | 'automations' | 'settings'
+export type AppView = 'chat' | 'portfolio' | 'watchlist' | 'review' | 'voc' | 'strategies' | 'automations' | 'settings'
 
 export interface Instrument {
   code: string
@@ -89,6 +94,15 @@ export interface WatchItem extends Instrument {
   source: 'user' | 'agent'
   signal: '未评估' | '观察' | '准备买入' | '风险预警' | '今日停手'
   refreshedAt: string
+  strategyLane?: string
+  strategyLabel?: string
+  suitableFor?: string
+  nextAction?: string
+  reasons?: string[]
+  sector?: string
+  theme?: string
+  concepts?: string[]
+  board?: 'main_sh' | 'main_sz' | 'chinext' | 'star' | 'other'
 }
 
 export type ChartPeriod = 'timeline' | '1m' | '5m' | '15m' | '30m' | '60m' | '120m' | 'five_day' | '1d' | '1w' | '1M'
@@ -234,51 +248,6 @@ export interface ChatMessage {
   attachments?: ChatAttachment[]
 }
 
-export type StockStrategyStance = '持仓管理' | '可关注' | '等待确认' | '暂不介入'
-export type StockStrategySignal = 'strong_buy' | 'strong_sell' | 'prepare_buy' | 'prepare_sell' | 'watch' | 'none'
-export type StockStrategySource = 'holding' | 'user' | 'agent'
-export type StockSignalHandlingStatus = 'executed' | 'watching' | 'ignored'
-
-export interface StockSignalHandling {
-  status: StockSignalHandlingStatus
-  handledAt: string
-  accountId?: string
-  trade?: TradeRecordInput
-}
-
-export interface StockStrategyPoint {
-  label: string
-  price?: string
-  condition: string
-}
-
-export interface StockStrategyCardData {
-  code: string
-  name: string
-  exchange?: string
-  instrumentType?: 'stock' | 'etf' | 'cbond'
-  accountScope?: string
-  source?: StockStrategySource
-  currentPrice?: string
-  changePercent?: string
-  signal?: StockStrategySignal
-  stance: StockStrategyStance
-  summary: string
-  strategy?: string
-  buyPoints: StockStrategyPoint[]
-  sellPoints: StockStrategyPoint[]
-  support?: string
-  resistance?: string
-  stopLoss?: string
-  invalidation?: string
-  risks: string[]
-  evidence: string[]
-  nextCheck?: string
-  confidence: '低' | '中' | '高'
-  dataAsOf?: string
-  handling?: StockSignalHandling
-}
-
 export interface ChatAttachment {
   id: string
   name: string
@@ -319,16 +288,6 @@ export interface ChatRunSnapshot {
 export interface ChatRunChangedEvent {
   sessionId: string
   run: ChatRunSnapshot | null
-}
-
-export interface TradeRecordInput {
-  code: string
-  side: 'buy' | 'sell'
-  quantity: number
-  price: number
-  fee?: number
-  occurredAt?: string
-  note?: string
 }
 
 export interface ChatSessionSummary {
@@ -409,6 +368,7 @@ export interface UserProfile {
   targetReturn: number
   targetMonths: number
   instruments: InstrumentType[]
+  stockBoards?: StockBoard[]
   tradingHabits: string[]
   riskRating?: RiskRating
   riskScore?: number
@@ -447,7 +407,21 @@ export interface AiConfig {
   provider: 'openai-compatible' | 'codex-local'
   baseUrl: string
   model: string
+  codexModel?: string
   timeoutSeconds?: number
   apiKey?: string
   codexPath?: string
+}
+
+export interface CodexModelOption {
+  id: string
+  displayName: string
+  description?: string
+  isDefault?: boolean
+  defaultReasoningEffort?: string
+  supportedReasoningEfforts?: Array<{
+    reasoningEffort: string
+    description?: string
+  }>
+  inputModalities?: string[]
 }

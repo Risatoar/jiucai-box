@@ -6,6 +6,7 @@ const titles: Record<AppView, { title: string; subtitle: string }> = {
   chat: { title: '问问韭菜盒子', subtitle: '帮你看行情、持仓和风险' },
   portfolio: { title: '家庭持仓', subtitle: '按成员和账户独立记录已确认成交' },
   watchlist: { title: '我的关注', subtitle: '收藏的品种和 AI 发现的机会' },
+  review: { title: '交易复盘', subtitle: '市场评估、热门板块与 AI 推荐复核' },
   voc: { title: '场外情绪', subtitle: '重点博主的反向情绪风险因子' },
   strategies: { title: '交易规则', subtitle: '查看哪些规则正在使用' },
   automations: { title: '定时任务', subtitle: '盘前、盘中、盘后自动运行' },

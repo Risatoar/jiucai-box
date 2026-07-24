@@ -1,14 +1,19 @@
 import type { HouseholdSnapshot, StockSignalHandlingStatus, StockStrategyCardData } from '../../../shared/types'
 
 export const signalTradeSide = (card: StockStrategyCardData): 'buy' | 'sell' | null => {
-  if (card.signal === 'strong_buy' || card.signal === 'prepare_buy') return 'buy'
-  if (card.signal === 'strong_sell' || card.signal === 'prepare_sell') return 'sell'
+  if (card.signal === 'immediate_buy' || card.signal === 'strong_buy' || card.signal === 'prepare_buy') return 'buy'
+  if (card.signal === 'immediate_sell' || card.signal === 'strong_sell' || card.signal === 'prepare_sell') return 'sell'
   return null
 }
 
 export const signalLabel = (card: StockStrategyCardData) => {
-  if (card.signal === 'strong_buy') return '强烈买入'
-  if (card.signal === 'strong_sell') return '强烈卖出'
+  const immediateExpired = card.signal?.startsWith('immediate_')
+    && (!card.executionValidUntil || !Number.isFinite(Date.parse(card.executionValidUntil)) || Date.parse(card.executionValidUntil) <= Date.now())
+  if (immediateExpired) return card.signal === 'immediate_sell' ? '推荐卖出（当前点位已过期）' : '推荐买入（当前点位已过期）'
+  if (card.signal === 'immediate_buy') return '立即买入'
+  if (card.signal === 'immediate_sell') return '立即卖出'
+  if (card.signal === 'strong_buy') return '推荐买入'
+  if (card.signal === 'strong_sell') return '推荐卖出'
   if (card.signal === 'prepare_buy') return '准备买入'
   if (card.signal === 'prepare_sell') return '准备卖出'
   return '关注'

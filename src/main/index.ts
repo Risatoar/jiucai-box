@@ -16,14 +16,14 @@ import { inspectCandidatePromotion, rollbackStrategies, setStrategyState } from 
 import { createAutomationTask, deleteAutomationTask, installAutomations, preserveCustomAutomations, setAutomationEnabled, updateAutomationTask } from './automation-store'
 import { runAutomationTask, startAutomationScheduler, stopAutomationScheduler } from './automation-runner'
 import { getDesktopStatus, installSwiftBar } from './desktop-integrations'
-import type { AiStreamEvent, AttachmentInput, ChatRunSnapshot, ChatSessionSummary, HouseholdAccountInput, HouseholdMemberInput, Instrument, TradeRecordInput, WatchItem } from '../shared/types'
+import type { AiStreamEvent, AttachmentInput, ChatRunSnapshot, ChatSessionSummary, HouseholdAccountInput, HouseholdMemberInput, Instrument, TradeRecordInput, WatchItem, ReviewReport, ReviewRequest } from '../shared/types'
 import type { PositionStrategyRequest } from '../shared/position-strategy'
 import { discardAttachment, importAttachmentFiles, resolveAttachmentPath, saveAttachmentBytes } from './attachment-store'
 import { prepareDependencies } from './setup-service'
 import { checkForAppUpdates, getUpdateStatus, onUpdateStatus, restartToUpdate } from './app-updater'
 import { cancelFeishuAuthorization, completeFeishuAuthorization, configureFeishuGroup, connectFeishu, getFeishuAuthorizationUrl, searchFeishuChats } from './feishu-connection'
 import { getFeishuConversationStatus, onFeishuConversationStatus, restartFeishuConversationService, startFeishuConversationService, stopFeishuConversationService } from './feishu-conversation'
-import { generateMarketInsight } from './market-insight'
+import { generateMarketInsight, type UnifiedModelAnalysis } from './market-insight'
 import { generatePositionStrategy } from './position-strategy'
 import type { MarketInsightRequest } from '../shared/types'
 import { buildMemoryContext, canGenerateMemories, createMemory, deleteMemory, loadMemories, saveMemoryCandidates, saveMemorySettings, updateMemory } from './memory-store'
@@ -37,6 +37,10 @@ import { openVocLoginBrowser, stopVocBrowser } from './voc-browser-cdp'
 import { startVocCollector, stopVocCollector } from './voc-collector'
 import { confirmNormalDiscipline } from './discipline-store'
 import { MULTI_ACCOUNT_OUTPUT_INSTRUCTION } from '../shared/account-separation'
+import { backfillSignalLedgerFromConversations, loadSignalHistory, reviewSignalLedger } from './signal-ledger-store'
+import { generateReviewReport, getReviewReport } from './review-service'
+import { saveReviewRating } from './review-store'
+import { listCodexModels } from './codex-models'
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'jiucai-asset', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 
@@ -112,6 +116,31 @@ const registerIpc = (): void => {
     try { return { ok: true, output: await runTradeMaster(command, args) } }
     catch (error) { return { ok: false, output: '', error: error instanceof Error ? error.message : String(error) } }
   })
+  ipcMain.handle('signals:history', async (_event, code: string) => {
+    try {
+      if (!/^\d{6}$/.test(code)) throw new Error('证券代码不合法')
+      return { ok: true, history: await loadSignalHistory(code) }
+    } catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
+  })
+  ipcMain.handle('signals:review', async (_event, tradingDate?: string) => {
+    try {
+      if (tradingDate && !/^\d{4}-\d{2}-\d{2}$/.test(tradingDate)) throw new Error('复盘日期不合法')
+      return { ok: true, review: await reviewSignalLedger(tradingDate) }
+    } catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
+  })
+
+  ipcMain.handle('review:get', async (_event, request: ReviewRequest) => {
+    try { return { ok: true, report: await getReviewReport(request) }
+    } catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
+  })
+  ipcMain.handle('review:refresh', async (_event, request: ReviewRequest) => {
+    try { return { ok: true, report: await generateReviewReport({ ...request, force: true }) }
+    } catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
+  })
+  ipcMain.handle('review:rating', async (_event, period: ReviewReport['period'], tradingDate: string, input: import('./review-store').ReviewRatingInput) => {
+    try { return { ok: true, report: await saveReviewRating(period, tradingDate, input) }
+    } catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
+  })
   ipcMain.handle('ai:chat:list-runs', () => listChatRuns())
   ipcMain.handle('ai:chat:cancel', (_event, sessionId: string) => {
     const cancelled = cancelChatRun(sessionId)
@@ -171,7 +200,16 @@ const registerIpc = (): void => {
   ipcMain.handle('ai:market-insight', async (_event, request: MarketInsightRequest) => {
     try {
       const [config, snapshot] = await Promise.all([loadAiConfig(), loadTradeMasterSnapshot()])
-      return { ok: true, insight: await generateMarketInsight(config, request, buildTradeContext(snapshot)) }
+      let unifiedAnalyses: UnifiedModelAnalysis[] = []
+      if (request.phase === 'intraday') {
+        try {
+          const plan = JSON.parse(await runTradeMaster('plan', ['today'])) as {
+            instruments?: Array<UnifiedModelAnalysis & { instrument?: { code?: string } }>
+          }
+          unifiedAnalyses = (plan.instruments || []).filter((item) => item.instrument?.code === request.item.code)
+        } catch { /* model evidence remains empty, so intraday points are forced empty */ }
+      }
+      return { ok: true, insight: await generateMarketInsight(config, request, buildTradeContext(snapshot), unifiedAnalyses) }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
@@ -202,6 +240,10 @@ const registerIpc = (): void => {
   ipcMain.handle('attachments:discard', (_event, storageKey: string) => discardAttachment(storageKey))
   ipcMain.handle('ai:config:load', () => loadAiConfig())
   ipcMain.handle('ai:config:save', (_event, config) => saveAiConfig(config))
+  ipcMain.handle('ai:codex-models:list', async (_event, codexPath?: string) => {
+    try { return { ok: true, ...await listCodexModels(codexPath) } }
+    catch (error) { return { ok: false, models: [], error: error instanceof Error ? error.message : String(error) } }
+  })
   ipcMain.handle('chat-sessions:list', (_event, archived: boolean) => listChatSessions(archived))
   ipcMain.handle('chat-sessions:create', () => createChatSession())
   ipcMain.handle('chat-sessions:load', (_event, id: string) => loadChatSession(id))
@@ -447,6 +489,7 @@ app.whenReady().then(async () => {
   })
   setTimeout(() => void checkForAppUpdates().catch(() => undefined), 5000)
   createTray()
+  await backfillSignalLedgerFromConversations().catch(() => 0)
   await runTradeMaster('automation', ['sync-defaults']).catch(() => undefined)
   await rolloverAvailableQuantitiesBeforeOpen().catch(() => undefined)
   startAutomationScheduler()

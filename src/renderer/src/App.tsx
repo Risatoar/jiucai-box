@@ -16,16 +16,19 @@ import { StrategyLabView } from './components/StrategyLabView'
 import { SetupView } from './components/SetupView'
 import { Topbar } from './components/Topbar'
 import { WatchlistView } from './components/WatchlistView'
+import { ReviewView } from './components/ReviewView'
 import { VocMonitorView } from './components/VocMonitorView'
 import { useAutomationOnboarding } from './hooks/useAutomationOnboarding'
 import { aggregate120MinuteBars } from './components/kline-chart-utils'
 import { finishChatRun, hydrateChatRuns, setChatRun, startChatRun, type ChatRunMap } from './utils/chat-run'
 import { assetFromSnapshot, automationsFromSnapshot, disciplineFromSnapshot, feishuConfigFromSnapshot, gatesFromSnapshot, householdFromSnapshot, notificationEventsFromSnapshot, positionsFromSnapshot, strategiesFromSnapshot, watchlistFromSnapshot } from './utils/snapshot'
 import { shouldLoadMarketBars } from './utils/market-data'
+import { loadMarketQuoteUpdates } from './utils/market-quote-batch'
+import { upsertSessionSummary } from './utils/chat-session-summary'
 import { clampPaneWidth, defaultPaneWidth, paneWidthFromPointer, PANE_LIMITS, type PaneSide } from './utils/pane-layout'
 import { DEFAULT_AI_TIMEOUT_SECONDS } from '../../shared/ai-config'
 const initialAiConfig: AiConfig = { provider: 'codex-local', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5', timeoutSeconds: DEFAULT_AI_TIMEOUT_SECONDS }
-const fallbackProfile: UserProfile = { capital: 0, styles: ['波段'], experience: '1年以内', maxDrawdown: 8, targetReturn: 20, targetMonths: 12, instruments: ['stock'], tradingHabits: ['只看关键提醒'] }
+const fallbackProfile: UserProfile = { capital: 0, styles: ['波段'], experience: '1年以内', maxDrawdown: 8, targetReturn: 20, targetMonths: 12, instruments: ['stock'], stockBoards: ['main_sh', 'main_sz', 'chinext', 'star'], tradingHabits: ['只看关键提醒'] }
 const initialSetup: SetupProgress = { stage: 'checking', percent: 4, title: '正在准备韭菜盒子', detail: '检查核心组件与本地数据目录' }
 const loadPaneWidths = () => {
   const viewportWidth = window.innerWidth
@@ -190,14 +193,15 @@ export default function App() {
   useEffect(() => {
     if (typeof window.desktopApi?.onChatSessionChanged !== 'function') return
     return window.desktopApi.onChatSessionChanged((changed) => {
-      void refreshSessions()
+      setSessions((current) => changed.archivedAt ? current.filter((item) => item.id !== changed.id) : upsertSessionSummary(current, changed))
+      setArchivedSessions((current) => changed.archivedAt ? upsertSessionSummary(current, changed) : current.filter((item) => item.id !== changed.id))
       const visible = viewRef.current === 'chat'
         && activeSessionIdRef.current === changed.id
         && document.visibilityState === 'visible'
         && document.hasFocus()
       if (changed.messageCount > 0 && !visible) setUnreadSessionIds((current) => new Set(current).add(changed.id))
     })
-  }, [refreshSessions])
+  }, [])
   useEffect(() => {
     if (conversationsStarted.current) return
     conversationsStarted.current = true
@@ -224,59 +228,54 @@ export default function App() {
   }, [])
   useEffect(() => {
     if (!window.desktopApi || !snapshot) return
+    let active = true, quoteRequestRunning = false
     const facts = watchlistFromSnapshot(snapshot)
     setWatchlist((current) => facts.map((fact) => {
       const quote = current.find((item) => item.code === fact.code)
       return quote ? { ...fact, latestPrice: quote.latestPrice, changePercent: quote.changePercent, volume: quote.volume, refreshedAt: quote.refreshedAt } : fact
     }))
     const refreshQuotes = async () => {
-      const updates = new Map<string, { price: number; change: number; amount: string; time: string }>()
-      await Promise.all(facts.map(async (item) => {
-        const result = await window.desktopApi!.runTradeMaster('market', ['quote', '--code', item.code])
-        if (!result.ok) return
-        try {
-          const payload = JSON.parse(result.output) as { quotes?: Array<{ price: number; changeRatio: number | null; amount: number | null; exchangeTime: string | null }> }
-          const quote = payload.quotes?.[0]
-          if (!quote) return
-          const amount = quote.amount == null ? '--' : quote.amount >= 100_000_000 ? `${(quote.amount / 100_000_000).toFixed(2)}亿` : `${(quote.amount / 10_000).toFixed(0)}万`
-          updates.set(item.code, { price: quote.price, change: (quote.changeRatio || 0) * 100, amount, time: quote.exchangeTime ? new Date(quote.exchangeTime).toLocaleTimeString('zh-CN', { hour12: false }) : new Date().toLocaleTimeString('zh-CN', { hour12: false }) })
-        } catch { /* retain the last verified quote */ }
-      }))
-      setWatchlist((current) => current.map((item) => { const update = updates.get(item.code); return update ? { ...item, latestPrice: update.price, changePercent: update.change, volume: update.amount, refreshedAt: update.time } : item }))
+      if (quoteRequestRunning || document.visibilityState !== 'visible' || !facts.length) return
+      quoteRequestRunning = true
+      try {
+        const updates = await loadMarketQuoteUpdates(window.desktopApi!.runTradeMaster, facts.map((item) => item.code))
+        if (active) setWatchlist((current) => current.map((item) => { const update = updates.get(item.code); return update ? { ...item, latestPrice: update.price, changePercent: update.change, volume: update.amount, refreshedAt: update.time } : item }))
+      } finally { quoteRequestRunning = false }
     }
     void refreshQuotes()
     const quoteTimer = window.setInterval(() => void refreshQuotes(), 30_000)
-    return () => window.clearInterval(quoteTimer)
+    const refreshVisibleQuotes = () => { if (document.visibilityState === 'visible') void refreshQuotes() }
+    document.addEventListener('visibilitychange', refreshVisibleQuotes)
+    return () => { active = false; window.clearInterval(quoteTimer); document.removeEventListener('visibilitychange', refreshVisibleQuotes) }
   }, [snapshot?.loadedAt])
   useEffect(() => {
-    if (!shouldLoadMarketBars(Boolean(window.desktopApi), selected?.code, view) || !selected) {
-      setChartBars([]); setChartError(''); setChartLoading(false); return
-    }
-    let active = true
+    if (!shouldLoadMarketBars(Boolean(window.desktopApi), selected?.code, view) || !selected) { setChartBars([]); setChartError(''); setChartLoading(false); return }
+    let active = true, barRequestRunning = false
     const refreshBars = async () => {
+      if (barRequestRunning || document.visibilityState !== 'visible') return
+      barRequestRunning = true
       setChartLoading(true)
       const requestPeriod = chartPeriod === 'timeline' ? '1m' : chartPeriod === '120m' ? '60m' : chartPeriod === 'five_day' ? '5m' : chartPeriod
       const limitByPeriod: Record<ChartPeriod, string> = {
         timeline: '300', '1m': '300', '5m': '300', '15m': '300', '30m': '240', '60m': '240', '120m': '240', five_day: '480', '1d': '220', '1w': '160', '1M': '120'
       }
-      const result = await window.desktopApi!.runTradeMaster('market', ['bars', '--code', selected.code, '--period', requestPeriod, '--limit', limitByPeriod[chartPeriod]])
-      if (!active) return
-      if (!result.ok) { setChartError(result.error || 'K 线加载失败'); setChartBars([]); setChartLoading(false); return }
       try {
+        const result = await window.desktopApi!.runTradeMaster('market', ['bars', '--code', selected.code, '--period', requestPeriod, '--limit', limitByPeriod[chartPeriod]])
+        if (!active) return
+        if (!result.ok) { setChartError(result.error || 'K 线加载失败'); setChartBars([]); return }
         const payload = JSON.parse(result.output) as { bars?: MarketBar[] }
         let bars = (payload.bars || [])
           .filter((bar) => [bar.open, bar.high, bar.low, bar.close, bar.volume].every(Number.isFinite))
           .sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
         if (chartPeriod === 'timeline' && bars.length) {
-          const latestTradeDate = bars.at(-1)!.time.slice(0, 10)
-          bars = bars.filter((bar) => bar.time.slice(0, 10) === latestTradeDate)
+          const latestTradeDate = bars.at(-1)!.time.slice(0, 10); bars = bars.filter((bar) => bar.time.slice(0, 10) === latestTradeDate)
         }
         if (chartPeriod === '120m') bars = aggregate120MinuteBars(bars)
         setChartBars(bars)
         setChartError(bars.length ? '' : '行情源暂未返回该周期数据')
         setChartRefreshedAt(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
-      } catch { setChartBars([]); setChartError('K 线数据格式异常') }
-      finally { setChartLoading(false) }
+      } catch { if (active) { setChartBars([]); setChartError('K 线数据格式异常') } }
+      finally { barRequestRunning = false; if (active) setChartLoading(false) }
     }
     setChartBars([]); setChartError('')
     void refreshBars()
@@ -409,16 +408,6 @@ export default function App() {
     if (result.ok) await refresh()
     return { ok: result.ok, error: result.error }
   }
-  const setStrategyStatus = async (id: string, action: 'pause' | 'enable' | 'promote') => {
-    const result = await window.desktopApi!.setStrategyStatus(id, action)
-    if (result.ok) await refresh()
-    return result
-  }
-  const rollbackStrategy = async () => {
-    const result = await window.desktopApi!.rollbackStrategies()
-    if (result.ok) await refresh()
-    return result
-  }
   const runAutomation = async (id: string) => {
     const sessionId = automationSessionId(id)
     const running = window.desktopApi!.runAutomation(id)
@@ -465,15 +454,15 @@ export default function App() {
   if (!onboarded) return <Onboarding onComplete={completeOnboarding} connectionError={bootstrapError} />
 
   const content = (() => {
-    if (view === 'chat') return <ChatWorkspace aiConfig={aiConfig} sessionId={activeSessionId} runState={activeChatRun} instruments={chatInstruments} onSessionUpdated={refreshSessions} onRunStart={beginChatRun} onRunFinish={endChatRun} onRetryAutomation={retryAutomation} onOpenSettings={() => setView('settings')} factConnected={factConnected} onFactsUpdated={refresh} household={household} onRecordTrade={recordHouseholdTrade} />
+    if (view === 'chat') return <ChatWorkspace aiConfig={aiConfig} sessionId={activeSessionId} runState={activeChatRun} instruments={chatInstruments} onRunStart={beginChatRun} onRunFinish={endChatRun} onRetryAutomation={retryAutomation} onOpenSettings={() => setView('settings')} factConnected={factConnected} onFactsUpdated={refresh} household={household} onRecordTrade={recordHouseholdTrade} />
     if (view === 'portfolio') return <PortfolioView household={household} positions={positions} totalAsset={totalAsset} onChat={() => setView('chat')} onRecordTrade={recordHouseholdTrade} onCreateMember={createHouseholdMember} onCreateAccount={createHouseholdAccount} onUpdateMember={updateHouseholdMember} onUpdateAccount={updateHouseholdAccount} />
     if (view === 'watchlist') return <WatchlistView items={watchlist} selected={selected} bars={chartBars} period={chartPeriod} chartLoading={chartLoading} chartError={chartError} chartRefreshedAt={chartRefreshedAt} onPeriod={setChartPeriod} onSelect={setSelected} onSearch={searchWatchItems} onAdd={addWatchItem} onRemove={removeWatchItem} onScan={scanWatchlist} />
+    if (view === 'review') return <ReviewView />
     if (view === 'voc') return <VocMonitorView snapshot={snapshot?.voc} onUpdateSource={async (id, patch) => { const result = await window.desktopApi!.updateVocSource(id, patch); if (result.ok) await refresh(); return result }} onImportSources={async (raw) => { const result = await window.desktopApi!.importVocSources(raw); if (result.ok) await refresh(); return result }} onOpenExternal={(url) => window.desktopApi!.openExternal(url)} onOpenLogin={() => window.desktopApi!.openVocLogin()} />
-    if (view === 'strategies') return <StrategyLabView strategies={strategies} onAskAi={() => setView('chat')} onCreateCandidate={createCandidate} onStatusChange={setStrategyStatus} onRollback={rollbackStrategy} versionCount={Array.isArray(snapshot?.strategyVersions) ? snapshot.strategyVersions.length : 0} />
+    if (view === 'strategies') return <StrategyLabView strategies={strategies} onAskAi={() => setView('chat')} onCreateCandidate={createCandidate} versionCount={Array.isArray(snapshot?.strategyVersions) ? snapshot.strategyVersions.length : 0} />
     if (view === 'automations') return <AutomationsView tasks={automations} installStatus={(snapshot?.automation as { install_status?: string } | null)?.install_status} onRestoreDefaults={async () => { const result = await window.desktopApi!.restoreDefaultAutomations(); if (result.ok) await refresh(); return result }} onInstall={async () => { const result = await window.desktopApi!.installAutomations(); if (result.ok) await refresh(); return result }} onCreate={async (input) => { const result = await window.desktopApi!.createAutomation(input); if (result.ok) await refresh(); return result }} onUpdate={async (id, input) => { const result = await window.desktopApi!.updateAutomation(id, input); if (result.ok) await refresh(); return result }} onDelete={async (id) => { const result = await window.desktopApi!.deleteAutomation(id); if (result.ok) await refresh(); return result }} onToggle={async (id, enabled) => { const result = await window.desktopApi!.setAutomationEnabled(id, enabled); if (result.ok) await refresh(); return result }} onRun={runAutomation} />
     return <SettingsView userProfile={userProfile} onUserProfile={updateUserProfile} aiConfig={aiConfig} onAiConfig={updateAiConfig} tradeMasterHome={snapshot?.home} factConnected={factConnected} discipline={discipline} onConfirmNormalDiscipline={async () => { const result = await window.desktopApi!.confirmNormalDiscipline(); if (result.ok) await refresh(); return result }} notificationConfigured={notificationConnected} notificationConfig={feishuConfig} onRunDoctor={() => window.desktopApi?.runTradeMaster('doctor')} onConnectFeishu={async () => refreshAfterFeishuConnection(await window.desktopApi!.connectFeishu())} onSearchFeishuChats={(query) => window.desktopApi!.searchFeishuChats(query)} onConfigureFeishuGroup={async (chatId, name) => refreshAfterFeishuConnection(await window.desktopApi!.configureFeishuGroup(chatId, name))} onGetFeishuConversationStatus={() => window.desktopApi!.getFeishuConversationStatus()} onRestartFeishuConversation={() => window.desktopApi!.restartFeishuConversation()} onFeishuConversationStatus={(listener) => window.desktopApi!.onFeishuConversationStatus(listener)} onCompleteFeishuAuthorization={async (authorizationId) => refreshAfterFeishuConnection(await window.desktopApi!.completeFeishuAuthorization(authorizationId))} onOpenFeishuAuthorization={(authorizationId) => window.desktopApi!.openFeishuAuthorization(authorizationId)} onCancelFeishuAuthorization={(authorizationId) => window.desktopApi!.cancelFeishuAuthorization(authorizationId)} onTestFeishu={() => window.desktopApi!.testFeishu()} onDesktopStatus={() => window.desktopApi!.desktopStatus()} onInstallSwiftBar={() => window.desktopApi!.installSwiftBar()} onGetUpdateStatus={() => window.desktopApi!.getUpdateStatus()} onCheckForUpdates={() => window.desktopApi!.checkForUpdates()} onRestartToUpdate={() => window.desktopApi!.restartToUpdate()} onUpdateStatus={(listener) => window.desktopApi!.onUpdateStatus(listener)} onOpenExternal={(url) => window.desktopApi!.openExternal(url)} />
   })()
-
   return (
     <div className={`app-shell ${view === 'settings' ? 'settings-mode' : ''} ${leftCollapsed ? 'left-collapsed' : ''} ${rightCollapsed ? 'right-collapsed' : ''}`} style={{ '--left-pane-width': `${paneWidths.left}px`, '--right-pane-width': `${paneWidths.right}px` } as CSSProperties}>
       <Sidebar collapsed={leftCollapsed} onCollapsed={() => setLeftCollapsed((value) => !value)} activeView={view} onNavigate={setView} discipline={discipline} sessions={sessions} archivedSessions={archivedSessions} busySessionIds={busySessionIds} unreadSessionIds={unreadSessionIds} activeSessionId={activeSessionId} onNewConversation={() => void createConversation()} onSelectConversation={openConversation} onArchiveConversation={archiveConversation} onRestoreConversation={restoreConversation} factConnected={factConnected} notificationConnected={notificationConnected} automationReady={(snapshot?.automation as { install_status?: string } | null)?.install_status === 'installed'} />

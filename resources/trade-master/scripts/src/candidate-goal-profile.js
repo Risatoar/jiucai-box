@@ -58,9 +58,17 @@ export function buildCandidateGoalProfile(goals = {}, profile = {}, asOf = new D
     const remainingTradingDays = Math.max(1, Math.round(calendarDays * 5 / 7));
     const requiredPortfolioReturn20d = (Math.pow(targetAsset / currentAsset, 20 / remainingTradingDays) - 1) * 100;
     const constraints = goals.constraints ?? {};
-    const exposureRatio = clamp(constraints.max_gross_exposure_ratio ?? 1, 0.1, 1);
+    const configuredExposureRatio = clamp(constraints.max_gross_exposure_ratio ?? 1, 0.1, 1);
+    const minimumCashBuffer = Math.max(0, finite(constraints.minimum_cash_buffer));
+    const exposureCapacity = Math.max(0, Math.min(
+        currentAsset * configuredExposureRatio,
+        currentAsset - minimumCashBuffer,
+    ));
+    if (!(exposureCapacity > 0))
+        return inactiveProfile('现金安全垫已占满当前资产，没有可用于新候选的资金', goals, profile);
+    const exposureRatio = clamp(exposureCapacity / currentAsset, 0.01, 1);
     const maxPositions = Math.max(1, Math.round(finite(constraints.max_positions, 1)));
-    const allocationPerPosition = currentAsset * exposureRatio / maxPositions;
+    const allocationPerPosition = exposureCapacity / maxPositions;
     const costs = roundTripCosts(goals, allocationPerPosition);
     const requiredNetReturn20d = requiredPortfolioReturn20d / exposureRatio;
     const requiredGrossByType = Object.fromEntries(Object.entries(costs).map(([type, cost]) => [
@@ -78,9 +86,14 @@ export function buildCandidateGoalProfile(goals = {}, profile = {}, asOf = new D
         target_date: targetDate,
         remaining_trading_days_estimate: remainingTradingDays,
         required_portfolio_return_20d_percent: round(requiredPortfolioReturn20d, 2),
+        configured_max_gross_exposure_ratio: configuredExposureRatio,
         max_gross_exposure_ratio: exposureRatio,
+        exposure_capacity: round(exposureCapacity, 2),
+        minimum_cash_buffer: round(minimumCashBuffer, 2),
         max_positions: maxPositions,
         allocation_per_position: round(allocationPerPosition, 2),
+        single_trade_risk_amount: finite(constraints.single_trade_risk_amount) || null,
+        max_daily_trades: finite(constraints.max_daily_trades) || null,
         round_trip_cost_percent: costs,
         required_instrument_return_20d_percent: requiredGrossByType,
         max_drawdown_percent: round(maxDrawdownPercent, 2),

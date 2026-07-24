@@ -1,19 +1,43 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { loadConfig, readJson, tradeMasterHome, writeJson } from './storage.js';
 function safe(value) {
     return value.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
 }
+function finite(value) {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
 export function validateAndPromote(candidate) {
     const config = loadConfig();
     const limits = config.refinement;
+    const evidence = candidate.evidence ?? {};
+    const historySamples = finite(evidence.history_samples);
+    const outOfSampleSamples = finite(evidence.out_of_sample_samples);
+    const shadowDays = finite(evidence.shadow_days);
+    const drawdownDelta = finite(evidence.drawdown_delta);
+    const profitFactor = finite(evidence.profit_factor);
+    const losingSamples = finite(evidence.losing_samples);
+    const conflicts = finite(evidence.conflicts);
+    const outOfSampleAccuracy = finite(evidence.out_of_sample_accuracy);
+    const confidenceLowerBound = finite(evidence.confidence_lower_bound);
+    const scenarioCoverage = finite(evidence.scenario_coverage);
+    const weakScenarioCount = finite(evidence.weak_scenario_count);
     const checks = [
-        { name: 'history_samples', passed: candidate.evidence.history_samples >= limits.minimum_history_samples },
-        { name: 'out_of_sample_samples', passed: candidate.evidence.out_of_sample_samples >= limits.minimum_out_of_sample_samples },
-        { name: 'shadow_days', passed: candidate.evidence.shadow_days >= limits.minimum_shadow_days },
-        { name: 'drawdown_delta', passed: candidate.evidence.drawdown_delta <= limits.maximum_drawdown_delta },
-        { name: 'profit_factor', passed: candidate.evidence.profit_factor >= limits.minimum_profit_factor },
-        { name: 'conflicts', passed: candidate.evidence.conflicts === 0 },
+        { name: 'history_samples', passed: historySamples != null && historySamples >= limits.minimum_history_samples, actual: historySamples },
+        { name: 'out_of_sample_samples', passed: outOfSampleSamples != null && outOfSampleSamples >= limits.minimum_out_of_sample_samples, actual: outOfSampleSamples },
+        { name: 'out_of_sample_accuracy', passed: outOfSampleAccuracy != null && outOfSampleAccuracy >= (limits.minimum_out_of_sample_accuracy ?? 80), actual: outOfSampleAccuracy },
+        { name: 'confidence_lower_bound', passed: confidenceLowerBound != null && confidenceLowerBound >= (limits.minimum_confidence_lower_bound ?? 80), actual: confidenceLowerBound },
+        { name: 'scenario_coverage', passed: scenarioCoverage != null && scenarioCoverage >= (limits.minimum_scenario_coverage ?? 7), actual: scenarioCoverage },
+        { name: 'weak_scenario_count', passed: weakScenarioCount === 0, actual: weakScenarioCount },
+        { name: 'shadow_days', passed: shadowDays != null && shadowDays >= limits.minimum_shadow_days, actual: shadowDays },
+        { name: 'drawdown_delta', passed: drawdownDelta != null && drawdownDelta <= limits.maximum_drawdown_delta, actual: drawdownDelta },
+        {
+            name: 'profit_factor',
+            passed: (profitFactor != null && profitFactor >= limits.minimum_profit_factor)
+                || (outOfSampleSamples != null && outOfSampleSamples > 0 && losingSamples === 0),
+            actual: profitFactor ?? (losingSamples === 0 ? 'no_losses' : null),
+        },
+        { name: 'conflicts', passed: conflicts === 0, actual: conflicts },
     ];
     const passed = checks.every((item) => item.passed);
     const root = tradeMasterHome();
@@ -37,6 +61,16 @@ export function validateAndPromote(candidate) {
     };
     writeJson(activePath, next);
     return { status: 'promoted', promoted: true, checks, version: next.version, rollback_file: rollbackRelative };
+}
+export function validateLatestCandidate() {
+    const root = join(tradeMasterHome(), 'strategies', 'candidates');
+    const files = existsSync(root)
+        ? readdirSync(root).filter((name) => /^rolling-backtest-\d{4}-\d{2}-\d{2}\.json$/.test(name)).sort()
+        : [];
+    if (!files.length)
+        return { status: 'missing', promoted: false, reason: '没有可验证的滚动回测候选' };
+    const candidateFile = join(root, files.at(-1));
+    return { ...validateAndPromote(readJson(candidateFile)), source_candidate: candidateFile };
 }
 export function monitorAndRollback(input) {
     const config = loadConfig();

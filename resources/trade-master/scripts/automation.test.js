@@ -31,7 +31,7 @@ describe('automation default migration', () => {
 
         const synced = syncDefaultAutomations();
         const intraday = synced.tasks.find((task) => task.id === 'intraday');
-        expect(intraday.description).toBe('监控持仓强买卖信号，并扫描我的收藏和AI发现的高质量买点');
+        expect(intraday.description).toBe('监控持仓推荐级买卖信号，并扫描我的收藏和AI发现的高质量买点');
         expect(intraday.prompt).toContain('new_buy_signals');
         expect(intraday.prompt).toContain('source=user');
         expect(intraday.prompt).toContain('source=agent');
@@ -96,5 +96,36 @@ describe('automation default migration', () => {
         expect(candidate.prompt).toContain('所有候选必须按单个标的聚合');
         expect(candidate.prompt).toContain('禁止先列全部标的再按字段拆卡');
         expect(synced.localized).toContain('candidate_refresh');
+    });
+
+    it('upgrades daily review and refinement tasks to use historical signal outcomes', async () => {
+        const home = await mkdtemp(join(tmpdir(), 'automation-signal-review-'));
+        process.env.TRADE_MASTER_HOME = home;
+        const automationHome = join(home, 'automation');
+        await mkdir(automationHome, { recursive: true });
+        await writeFile(join(automationHome, 'manifest.json'), JSON.stringify({
+            tasks: [
+                { id: 'formal_close', mode: 'formal_close', description: '收盘后核对行情和持仓记录', prompt: '旧正式收盘核对', enabled: true },
+                { id: 'post_market', mode: 'post_market', description: '核对今天的买卖，并总结经验', prompt: '旧盘后复盘', enabled: true },
+                { id: 'refine', mode: 'refine', description: '验证新的交易规则，保留修改前版本', prompt: '旧策略优化', enabled: true },
+            ],
+        }));
+
+        const synced = syncDefaultAutomations();
+        expect(synced.tasks.find((task) => task.id === 'formal_close').description).toContain('1/3/7/15交易日信号结果');
+        expect(synced.tasks.find((task) => task.id === 'post_market').prompt).toContain('1/3/7/15');
+        expect(synced.tasks.find((task) => task.id === 'post_market').prompt).toContain('goodcase');
+        expect(synced.tasks.find((task) => task.id === 'post_market').description).toContain('做T闭环');
+        expect(synced.tasks.find((task) => task.id === 'post_market').schedule.expression).toBe('50 15 * * 1-5');
+        expect(synced.tasks.find((task) => task.id === 'refine').prompt).toContain('样本外准确率');
+        expect(synced.tasks.find((task) => task.id === 'refine').prompt).toContain('95%置信下界');
+        expect(synced.tasks.find((task) => task.id === 'refine').description).toContain('80%');
+        expect(synced.tasks.find((task) => task.id === 'refine').schedule.expression).toBe('10 16 * * 1-5');
+        expect(synced.tasks.find((task) => task.id === 'rolling_backtest')).toMatchObject({
+            mode: 'rolling_backtest',
+            enabled: true,
+            schedule: { kind: 'cron', expression: '35 15 * * 1-5' },
+        });
+        expect(synced.localized).toEqual(expect.arrayContaining(['formal_close', 'post_market', 'refine']));
     });
 });

@@ -1,7 +1,22 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { buildMarketSectorSnapshot } from './market-sector-snapshot.js';
 
 const execFileAsync = promisify(execFile);
+
+const SW_LEVEL_ONE = [
+    ['美容护理', 'sw1_770000'], ['环保', 'sw1_760000'], ['石油石化', 'sw1_750000'],
+    ['煤炭', 'sw1_740000'], ['通信', 'sw1_730000'], ['传媒', 'sw1_720000'],
+    ['计算机', 'sw1_710000'], ['国防军工', 'sw1_650000'], ['机械设备', 'sw1_640000'],
+    ['电力设备', 'sw1_630000'], ['建筑装饰', 'sw1_620000'], ['建筑材料', 'sw1_610000'],
+    ['综合', 'sw1_510000'], ['非银金融', 'sw1_490000'], ['银行', 'sw1_480000'],
+    ['社会服务', 'sw1_460000'], ['商贸零售', 'sw1_450000'], ['房地产', 'sw1_430000'],
+    ['交通运输', 'sw1_420000'], ['公用事业', 'sw1_410000'], ['医药生物', 'sw1_370000'],
+    ['轻工制造', 'sw1_360000'], ['纺织服饰', 'sw1_350000'], ['食品饮料', 'sw1_340000'],
+    ['家用电器', 'sw1_330000'], ['汽车', 'sw1_280000'], ['电子', 'sw1_270000'],
+    ['有色金属', 'sw1_240000'], ['钢铁', 'sw1_230000'], ['基础化工', 'sw1_220000'],
+    ['农林牧渔', 'sw1_110000'],
+];
 
 const number = (value, divisor = 1) => {
     const parsed = Number(value);
@@ -123,6 +138,30 @@ export class SinaUniverseProvider {
         if (!normalized.length)
             throw new Error('新浪行情没有返回全市场列表');
         return [...new Map(normalized.map((item) => [item.instrument.code, item])).values()];
+    }
+
+    async listSectorSnapshot() {
+        const headers = { Referer: 'https://finance.sina.com.cn/', 'User-Agent': 'Mozilla/5.0' };
+        const sectors = await mapLimit(SW_LEVEL_ONE, 6, async ([industry, node]) => {
+            const count = Number(await curlJson(`https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeStockCount?node=${node}`, this.timeoutMs, headers));
+            if (!Number.isFinite(count) || count <= 0)
+                return [];
+            const pages = Array.from({ length: Math.ceil(count / 100) }, (_, index) => index + 1);
+            const chunks = await mapLimit(pages, 3, async (page) => {
+                const params = new URLSearchParams({ page: String(page), num: '100', sort: 'amount', asc: '0', node, symbol: '' });
+                const rows = await curlJson(`https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?${params}`, this.timeoutMs, headers);
+                return Array.isArray(rows) ? rows : [];
+            });
+            const collectedAt = new Date().toISOString();
+            return chunks.flat().map((item) => {
+                const normalized = normalizeSinaUniverseRow(item, 'stock', collectedAt);
+                return normalized ? { ...normalized, industry } : null;
+            }).filter((item) => item != null);
+        });
+        const snapshot = buildMarketSectorSnapshot([{ type: 'stock', items: sectors.flat() }]);
+        if (!snapshot.sectors.length)
+            throw new Error('新浪行情没有返回申万一级行业成分');
+        return { ...snapshot, source: 'sina_sw1_full_universe' };
     }
 
     async getQuote(code) {

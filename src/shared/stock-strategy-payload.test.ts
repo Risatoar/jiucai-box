@@ -35,4 +35,104 @@ describe('stock strategy payload', () => {
 
     expect(parseStockStrategyPayload(content, 8).map((card) => card.signal)).toEqual(['prepare_sell', 'watch'])
   })
+
+  it('只在当前点位和执行闸门全部通过时保留立即买入', () => {
+    const now = Date.now()
+    const immediate = {
+      code: '510300',
+      name: '沪深300ETF',
+      accountScope: '我 → 我的主账户',
+      currentPrice: '4.12',
+      signal: 'immediate_buy',
+      stance: '可关注',
+      summary: '当前点位满足买入条件',
+      buyPoints: [{ label: '当前点位立即买入', price: '4.12', condition: '当前价格仍在计划区间内' }],
+      sellPoints: [],
+      risks: [],
+      evidence: ['完整5分钟和15分钟证据已确认'],
+      confidence: '高',
+      dataAsOf: new Date(now - 30_000).toISOString(),
+      executionValidUntil: new Date(now + 4 * 60_000).toISOString(),
+      executionStatus: 'ready',
+      executionBlockers: []
+    }
+    const blocked = { ...immediate, code: '159516', executionStatus: 'blocked', executionBlockers: ['今日委托待确认'] }
+    const content = `<stock_strategy_cards>${JSON.stringify([immediate, blocked])}</stock_strategy_cards>`
+
+    const cards = parseStockStrategyPayload(content, 8)
+    expect(cards[0]).toMatchObject({ signal: 'immediate_buy', executionStatus: 'ready', executionBlockers: [] })
+    expect(cards[1]).toMatchObject({ signal: 'strong_buy', executionStatus: 'blocked', executionBlockers: ['今日委托待确认'] })
+  })
+
+  it('保留关键位的完整长文本供悬浮提示展示', () => {
+    const stopLoss = '按单笔最多亏20元反推；未确定买入价格前不生成虚假止损价，需先完成人工账户与成本复核'
+    const content = `<stock_strategy_cards>${JSON.stringify([{
+      code: '600095',
+      name: '湘财股份',
+      stance: '可关注',
+      summary: '等待人工复核',
+      buyPoints: [],
+      sellPoints: [],
+      stopLoss,
+      risks: [],
+      evidence: [],
+      confidence: '中'
+    }])}</stock_strategy_cards>`
+
+    expect(parseStockStrategyPayload(content)[0]?.stopLoss).toBe(stopLoss)
+  })
+
+  it('为统一模型信号推导动作目的', () => {
+    const content = `<stock_strategy_cards>${JSON.stringify([{
+      code: '300438',
+      name: '鹏辉能源',
+      signal: 'strong_sell',
+      stance: '持仓管理',
+      summary: '上涨趋势出现顶部派发证据',
+      decisionPolicyId: 'rolling-position-v25-robust-70',
+      positionState: 'trend_top_reduce',
+      tradeIntent: 't_sell',
+      triggerStrategy: 'trend_distribution_top',
+      triggerLevel: 'actionable',
+      triggerKState: 'closed',
+      buyPoints: [],
+      sellPoints: [{ label: '高位减仓', price: '30.20', condition: '闭合顶部派发信号仍成立' }],
+      risks: [],
+      evidence: ['V25 closed/actionable'],
+      confidence: '高'
+    }])}</stock_strategy_cards>`
+
+    expect(parseStockStrategyPayload(content, 3, true)[0]).toMatchObject({
+      signal: 'strong_sell',
+      actionPurpose: '逃顶 · 卖出准备做T'
+    })
+  })
+
+  it('定时任务卡片不是统一模型闭合信号时清空买卖点并降为观察', () => {
+    const content = `<stock_strategy_cards>${JSON.stringify([{
+      code: '510300',
+      name: '沪深300ETF',
+      signal: 'strong_buy',
+      stance: '可关注',
+      summary: '语言模型自行生成的买点',
+      decisionPolicyId: 'other-model',
+      positionState: 'entry_ready',
+      triggerStrategy: 'trend_pullback_entry',
+      triggerLevel: 'actionable',
+      triggerKState: 'forming',
+      buyPoints: [{ label: '猜测买点', price: '4.12', condition: '形成中K线触价' }],
+      sellPoints: [],
+      risks: [],
+      evidence: [],
+      confidence: '高'
+    }])}</stock_strategy_cards>`
+
+    expect(parseStockStrategyPayload(content, 3, true)[0]).toMatchObject({
+      signal: 'watch',
+      actionPurpose: '仅观察',
+      buyPoints: [],
+      sellPoints: [],
+      executionStatus: 'blocked'
+    })
+  })
 })

@@ -28,8 +28,12 @@ function sessionBucket(value, minutes) {
 }
 export function aggregateBars(bars, period) {
     const minutes = periodMinutes(period);
-    if (minutes <= 1 || bars.length === 0)
+    if (bars.length === 0)
+        return [];
+    const sourceMinutes = Math.max(1, Math.min(...bars.map((bar) => periodMinutes(bar.period ?? '1m'))));
+    if (minutes <= sourceMinutes)
         return bars.map((bar) => ({ ...bar, period }));
+    const expectedBars = Math.ceil(minutes / sourceMinutes);
     const output = [];
     let bucket = [];
     let key = '';
@@ -45,7 +49,7 @@ export function aggregateBars(bars, period) {
             volume: bucket.reduce((sum, bar) => sum + bar.volume, 0),
             amount: bucket.every((bar) => bar.amount == null) ? null : bucket.reduce((sum, bar) => sum + (bar.amount ?? 0), 0),
             period,
-            closed: bucket.length >= minutes && bucket.every((bar) => bar.closed),
+            closed: bucket.length >= expectedBars && bucket.every((bar) => bar.closed),
             source: bucket[0].source,
         });
     };

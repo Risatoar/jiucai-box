@@ -29,7 +29,7 @@ const registerCaptureFixture = () => {
     id: 'capture', title: '帮我看看现在的持仓安全吗', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messageCount: 24,
     messages: [
       { id: 'capture-user', role: 'user', content: '我把今天的持仓和交易记录放进来了，帮我看看现在安全吗？', timestamp: '19:42', attachments: [{ id: 'capture-position', name: '持仓截图.png', mimeType: 'image/png', size: 142000, kind: 'file', storageKey: 'capture/position.png' }] },
-      { id: 'capture-assistant', role: 'assistant', content: '结论：沪深 300 ETF 的闭合结构和量能已经确认，出现相对明确的条件买点。', timestamp: '19:43', stockStrategyCards: [{ code: '510300', name: '沪深300ETF', exchange: 'SH', instrumentType: 'etf', currentPrice: '4.168', changePercent: '+0.68%', signal: 'strong_buy', stance: '可关注', summary: '5分钟与15分钟闭合结构、独立量能同时确认，进入人工复核。', strategy: '先核对账户、纪律、费用和现金安全垫，再决定是否分批执行。', buyPoints: [{ label: '确认买点', price: '4.16-4.18', condition: '回踩不破均价线，且下一根完整5分钟K线继续保持量能' }], sellPoints: [], support: '4.12', resistance: '4.25', stopLoss: '4.08', invalidation: '有效跌破 4.08 后，本次买点失效。', risks: ['不得追价', '账户执行条件仍需人工核对'], evidence: ['5分钟与15分钟闭合结构确认', '独立量能达到阈值'], nextCheck: '下一根 5 分钟 K 线收盘后', confidence: '高', dataAsOf: '10:15' }], attachments: [{ id: 'capture-review', name: '今日复盘.pdf', mimeType: 'application/pdf', size: 68000, kind: 'file', storageKey: 'capture/review.pdf' }] },
+      { id: 'capture-assistant', role: 'assistant', content: '结论：沪深 300 ETF 的闭合结构、当前点位和账户执行条件均已确认，进入立即人工买入等级。', timestamp: '19:43', stockStrategyCards: [{ code: '510300', name: '沪深300ETF', exchange: 'SH', instrumentType: 'etf', accountScope: '我 → 我的主账户', currentPrice: '4.168', changePercent: '+0.68%', signal: 'immediate_buy', stance: '可关注', summary: '当前4.168元仍在计划买入区间，技术与账户执行条件均已通过。', strategy: '推荐在当前点位立即人工买入；这里只给出决策提示，不会连接券商下单。', buyPoints: [{ label: '当前点位立即买入', price: '4.168', condition: '当前报价仍在4.16至4.18计划区间内' }], sellPoints: [], support: '4.12', resistance: '4.25', stopLoss: '4.08', invalidation: '有效跌破 4.08 后，本次买点失效。', risks: ['成交后仍须遵守单笔风险上限'], evidence: ['5分钟与15分钟闭合结构确认', '独立量能达到阈值', '现金、费用、活动委托与风险预算已核对'], nextCheck: '成交回报或价格离开计划区间时', confidence: '高', dataAsOf: '2026-07-23T06:30:00.000Z', executionValidUntil: '2026-07-23T06:35:00.000Z', executionStatus: 'ready', executionBlockers: [] }], attachments: [{ id: 'capture-review', name: '今日复盘.pdf', mimeType: 'application/pdf', size: 68000, kind: 'file', storageKey: 'capture/review.pdf' }] },
       { id: 'capture-user-2', role: 'user', content: '那今天收盘前，我应该重点看什么？', timestamp: '19:47', attachments: [{ id: 'capture-note', name: '收盘检查.txt', mimeType: 'text/plain', size: 1200, kind: 'file', storageKey: 'capture/closing-check.txt' }] },
       { id: 'capture-assistant-2', role: 'assistant', content: '收盘前看两件事就够了：价格有没有跌破今天的低点，成交量有没有突然放大。两项都没有出现，就继续持有观察。', timestamp: '19:48' },
       { id: 'capture-user-3', role: 'user', content: '如果跌破了，要一次全部卖掉吗？', timestamp: '19:51' },
@@ -171,7 +171,7 @@ const registerCaptureFixture = () => {
   const archivedSessionIds = new Set()
   const watchlist = { instruments: [
     { code: '510300', name: '沪深300ETF', type: 'etf', exchange: 'SH', source: 'user', status: 'active', score: 82, signal: '观察' },
-    { code: '600519', name: '贵州茅台', type: 'stock', exchange: 'SH', source: 'agent', status: 'active', score: 76, signal: '未评估' }
+    { code: '600519', name: '贵州茅台', type: 'stock', exchange: 'SH', source: 'agent', status: 'active', score: 76, signal: '观察', strategyLane: 'hot_leader', strategyLabel: '热门主线龙头', suitableFor: '龙头战法选手', nextAction: '等待分歧转强' }
   ] }
   const household = {
     members: [
@@ -197,6 +197,15 @@ const registerCaptureFixture = () => {
     const period = args[args.indexOf('--period') + 1] || '5m'
     return { ok: true, output: JSON.stringify({ bars: captureBars(period) }) }
   })
+  ipcMain.handle('signals:history', (_event, code) => {
+    const outcome = (horizon, value, date) => ({ horizon, status: 'completed', tradingDate: date, closePrice: 4.168 * (1 + value / 100), underlyingReturnPercent: value, directionalReturnPercent: value, maxFavorablePercent: value + 0.8, maxAdversePercent: Math.min(-0.6, value - 1.2) })
+    const records = code === '510300' ? [
+      { id: 'signal-good', fingerprint: 'good', code, name: '沪深300ETF', side: 'buy', signal: 'strong_buy', stance: '可关注', recordedAt: '2026-07-10T02:15:00.000Z', signalDate: '2026-07-10', referencePrice: 4.08, referencePriceSource: 'current_price', summary: '回踩均价线后量价重新转强，提示分批买入复核。', points: [], risks: [], evidence: [], confidence: '高', sourceSessionId: 'capture', sourceMessageId: 'old-1', outcomes: [outcome(1, 1.4, '2026-07-11'), outcome(3, 3.2, '2026-07-15'), outcome(7, 5.1, '2026-07-21'), { horizon: 15, status: 'pending' }], caseKind: 'goodcase', caseReason: '7日方向收益 +5.10%，达到 +3% 有效阈值' },
+      { id: 'signal-bad', fingerprint: 'bad', code, name: '沪深300ETF', side: 'sell', signal: 'prepare_sell', stance: '持仓管理', recordedAt: '2026-07-17T06:20:00.000Z', signalDate: '2026-07-17', referencePrice: 4.11, referencePriceSource: 'current_price', summary: '短线走弱时过早提示减仓，随后价格重新转强。', points: [], risks: [], evidence: [], confidence: '中', sourceSessionId: 'capture', sourceMessageId: 'old-2', outcomes: [outcome(1, -1.8, '2026-07-20'), outcome(3, -3.4, '2026-07-22'), { horizon: 7, status: 'pending' }, { horizon: 15, status: 'pending' }], caseKind: 'badcase', caseReason: '3日方向收益 -3.40%，低于 -2% 失误阈值' }
+    ] : []
+    return { ok: true, history: { code, generatedAt: new Date().toISOString(), records, summary: { total: records.length, evaluated: records.length, pending: 0, goodcases: records.filter((item) => item.caseKind === 'goodcase').length, badcases: records.filter((item) => item.caseKind === 'badcase').length, neutral: 0, directionalAccuracyPercent: records.length ? 50 : null, byHorizon: [] } } }
+  })
+  ipcMain.handle('signals:review', () => ({ ok: true }))
   ipcMain.handle('watchlist:scan', async () => {
     await new Promise((resolve) => setTimeout(resolve, 650))
     return { ok: true, active: 6, added: 3, updated: 2, removed: 1, reviewed: 3, analyzed: 8 }
@@ -354,6 +363,10 @@ async function capture() {
     await new Promise((resolve) => setTimeout(resolve, 700))
     const complete = await window.webContents.capturePage()
     await writeFile(join(outputRoot, 'watchlist-scan-complete.png'), complete.toPNG())
+    await window.webContents.executeJavaScript(`(() => { const table = document.querySelector('.data-table-wrap'); if (table) table.scrollLeft = table.scrollWidth })()`)
+    await new Promise((resolve) => setTimeout(resolve, 120))
+    const completeRight = await window.webContents.capturePage()
+    await writeFile(join(outputRoot, 'watchlist-scan-complete-right.png'), completeRight.toPNG())
     console.log(outputRoot)
     window.destroy()
     app.quit()
@@ -420,7 +433,7 @@ async function capture() {
 
   const stockCardToggle = process.env.JIUCAI_CAPTURE_STOCK_FALLBACK === '1'
     ? `Array.from(document.querySelectorAll('.stock-strategy-tag')).at(-1)?.click()`
-    : `document.querySelector('.stock-strategy-tag')?.click()`
+    : `document.querySelector('.stock-signal-open')?.click()`
   await window.webContents.executeJavaScript(stockCardToggle)
   await new Promise((resolve) => setTimeout(resolve, 160))
   const stockCardCapture = await window.webContents.capturePage()

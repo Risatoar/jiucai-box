@@ -1,10 +1,10 @@
 import { spawn } from 'node:child_process'
-import { access } from 'node:fs/promises'
-import { constants } from 'node:fs'
 import type { AiConfig, AiMessageInput, AiStreamEvent, ChatAttachment } from '../shared/types'
-import { resolveAiTimeoutMs } from '../shared/ai-config'
+import { normalizeCodexCliModel, resolveAiTimeoutMs } from '../shared/ai-config'
 import { readAttachment, resolveAttachmentPath } from './attachment-store'
 import { parseCodexJsonLine, readSseJson } from './ai-stream'
+import { stripThinkingTags } from '../shared/ai-content-cleaner'
+import { resolveCodexBinary } from './codex-models'
 
 export interface AiExecutionOptions {
   purpose?: 'chat' | 'automation' | 'memory'
@@ -56,7 +56,7 @@ const runProcess = (binary: string, args: string[], input: string, options: AiEx
     child.stdout.on('data', (data) => { stdout += String(data) })
     child.stderr.on('data', (data) => { stderr += String(data) })
     child.on('error', (error) => finish(() => reject(error)))
-    child.on('close', (code) => finish(() => code === 0 ? resolve(stdout.trim()) : reject(new Error(summarizeProcessError(stderr, code)))))
+    child.on('close', (code) => finish(() => code === 0 ? resolve(stripThinkingTags(stdout.trim())) : reject(new Error(summarizeProcessError(stderr, code)))))
     if (options.signal?.aborted) abort()
     else options.signal?.addEventListener('abort', abort, { once: true })
     if (options.timeoutMs && options.timeoutMs > 0) timer = setTimeout(() => {
@@ -100,7 +100,7 @@ const runJsonProcess = (binary: string, args: string[], input: string, options: 
     child.on('error', (error) => finish(() => reject(error)))
     child.on('close', (code) => {
       if (lineBuffer) consumeLine(lineBuffer)
-      finish(() => code === 0 && finalText ? resolve(finalText) : reject(new Error(stderr || `Codex 没有返回最终内容，退出码 ${code}`)))
+      finish(() => code === 0 && finalText ? resolve(stripThinkingTags(finalText)) : reject(new Error(stderr || `Codex 没有返回最终内容，退出码 ${code}`)))
     })
     if (options.signal?.aborted) abort()
     else options.signal?.addEventListener('abort', abort, { once: true })
@@ -205,25 +205,13 @@ const callOpenAiCompatible = async (config: AiConfig, messages: AiMessageInput[]
   return readResponsesResponse(response, options.onEvent)
 }
 
-const resolveCodexBinary = async (configuredPath?: string): Promise<string> => {
-  const candidates = [
-    configuredPath,
-    process.env.CODEX_BINARY,
-    '/Applications/ChatGPT.app/Contents/Resources/codex',
-    '/Applications/Codex.app/Contents/Resources/codex',
-    '/opt/homebrew/bin/codex',
-    '/usr/local/bin/codex'
-  ].filter((candidate): candidate is string => Boolean(candidate))
-  for (const candidate of candidates) {
-    try { await access(candidate, constants.X_OK); return candidate }
-    catch { /* try the next known desktop or CLI location */ }
-  }
-  return 'codex'
+export const buildCodexExecArgs = (config: AiConfig, imageArgs: string[], purpose: AiExecutionOptions['purpose'] = 'chat', streaming = false, workingDirectory?: string) => {
+  const selectedModel = normalizeCodexCliModel(config.codexModel || config.model)
+  const modelArgs = selectedModel ? ['--model', selectedModel] : []
+  return purpose === 'automation' || purpose === 'memory'
+    ? ['exec', ...modelArgs, '--ephemeral', '--ignore-rules', '--sandbox', 'read-only', '--skip-git-repo-check', '--color', 'never', ...(streaming ? ['--json'] : []), ...imageArgs, '-']
+    : ['exec', ...modelArgs, '-c', 'approval_policy="never"', '--sandbox', 'workspace-write', '--skip-git-repo-check', ...(workingDirectory ? ['--cd', workingDirectory] : []), ...(streaming ? ['--json'] : []), ...imageArgs, '-']
 }
-
-export const buildCodexExecArgs = (_config: AiConfig, imageArgs: string[], purpose: AiExecutionOptions['purpose'] = 'chat', streaming = false, workingDirectory?: string) => purpose === 'automation' || purpose === 'memory'
-  ? ['exec', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--sandbox', 'read-only', '--skip-git-repo-check', '--color', 'never', ...(streaming ? ['--json'] : []), ...imageArgs, '-']
-  : ['exec', '-c', 'approval_policy="never"', '--sandbox', 'workspace-write', '--skip-git-repo-check', ...(workingDirectory ? ['--cd', workingDirectory] : []), ...(streaming ? ['--json'] : []), ...imageArgs, '-']
 
 const callCodex = async (config: AiConfig, messages: AiMessageInput[], options: AiExecutionOptions = {}): Promise<string> => {
   const attachments = messages.flatMap((message) => message.attachments || [])
@@ -264,8 +252,8 @@ export const sendAiMessage = async (config: AiConfig, messages: AiMessageInput[]
   const timer = setTimeout(() => { timedOut = true; controller.abort() }, timeoutMs)
   const resolvedOptions = { ...options, timeoutMs, signal: controller.signal }
   try {
-    if (config.provider === 'openai-compatible') return await callOpenAiCompatible(config, messages, resolvedOptions)
-    if (config.provider === 'codex-local') return await callCodex(config, messages, resolvedOptions)
+    if (config.provider === 'openai-compatible') return stripThinkingTags(await callOpenAiCompatible(config, messages, resolvedOptions))
+    if (config.provider === 'codex-local') return stripThinkingTags(await callCodex(config, messages, resolvedOptions))
     throw new Error('不支持的 AI Provider')
   } catch (error) {
     if (timedOut) throw new Error(`AI 执行超过 ${Math.round(timeoutMs / 1000)} 秒，已停止本次任务`)

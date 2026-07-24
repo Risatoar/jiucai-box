@@ -9,12 +9,20 @@ export interface OpportunityCandidate extends Instrument {
   changePercent?: number
   volume?: string
   technicalEvidence?: unknown
+  strategyLane?: string
+  strategyLabel?: string
+  suitableFor?: string
+  nextAction?: string
 }
 
 interface AiOpportunity {
   code?: unknown
   score?: unknown
   reasons?: unknown
+}
+
+interface CandidateTechnicalEvidence {
+  status?: string
 }
 
 const stripJsonFence = (content: string) => content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
@@ -40,7 +48,21 @@ export const buildOpportunityReviewPool = (
     return { ...item, ...screenedItem, latestPrice: live?.latestPrice, changePercent: live?.changePercent, volume: live?.volume, reasons: [...reasonList(screenedItem?.reasons || item.reasons), liveReason].slice(0, 3) }
   })
   const fresh = screened.filter((item) => !previousCodes.has(item.code))
-  return [...reevaluation, ...fresh].slice(0, 20)
+  return [...reevaluation, ...fresh].slice(0, 45)
+}
+
+const STRATEGY_LANE_ORDER = ['steady', 'short_3d', 'medium_long', 'hot_leader', 'limit_up']
+const nextActionFor = (candidate: OpportunityCandidate) => {
+  const evidence = candidate.technicalEvidence as CandidateTechnicalEvidence | undefined
+  if (evidence?.status === 'buy_ready') return '人工复核买点'
+  const actions: Record<string, string> = {
+    steady: '等待回踩企稳',
+    short_3d: '3日内等待放量',
+    medium_long: '等待趋势回踩',
+    hot_leader: '等待分歧转强',
+    limit_up: '只观察回封强度'
+  }
+  return actions[String(candidate.strategyLane)] || '重新扫描后生成'
 }
 
 export const parseWatchlistOpportunityAnalysis = (content: string, candidates: OpportunityCandidate[]): OpportunityCandidate[] => {
@@ -59,12 +81,26 @@ export const parseWatchlistOpportunityAnalysis = (content: string, candidates: O
     const aiScore = Number(item.score)
     const score = Number.isFinite(aiScore) ? Math.max(0, Math.min(100, Math.round(aiScore * 100) / 100)) : Number(candidate.score || 0)
     const reasons = reasonList(item.reasons)
-    return [{ ...candidate, score, reasons: reasons.length ? reasons : candidate.reasons, signal: '观察' }]
-  }).sort((left, right) => Number(right.score || 0) - Number(left.score || 0)).slice(0, 10)
+    const buyReady = (candidate.technicalEvidence as CandidateTechnicalEvidence | undefined)?.status === 'buy_ready'
+    return [{
+      ...candidate,
+      score,
+      reasons: reasons.length ? reasons : candidate.reasons,
+      signal: buyReady ? '准备买入' : '观察',
+      nextAction: nextActionFor(candidate)
+    }]
+  })
 
-  const expectedMinimum = Math.min(5, candidates.length)
-  if (analyzed.length < expectedMinimum) throw new Error(`AI 只完成了 ${analyzed.length}/${expectedMinimum} 个候选分析，请重试`)
-  return analyzed
+  if (candidates.length < 10) throw new Error(`确定性模型只形成 ${candidates.length}/10 个合格候选，已保留原关注列表`)
+  if (analyzed.length !== 10) throw new Error(`AI 只完成了 ${analyzed.length}/10 个候选分析，请重试`)
+  for (const lane of STRATEGY_LANE_ORDER) {
+    const count = analyzed.filter((item) => item.strategyLane === lane).length
+    if (count !== 2) throw new Error(`AI 返回的 ${lane} 策略篮子为 ${count}/2，只能重排同篮子候选，不能改换策略归属`)
+  }
+  return analyzed.sort((left, right) => {
+    const laneOrder = STRATEGY_LANE_ORDER.indexOf(String(left.strategyLane)) - STRATEGY_LANE_ORDER.indexOf(String(right.strategyLane))
+    return laneOrder || Number(right.score || 0) - Number(left.score || 0)
+  })
 }
 
 export const analyzeWatchlistOpportunities = async (
@@ -72,9 +108,9 @@ export const analyzeWatchlistOpportunities = async (
   candidates: OpportunityCandidate[],
   previousAgentCodes: string[]
 ): Promise<OpportunityCandidate[]> => {
-  if (candidates.length < 5) throw new Error(`深度分析候选只有 ${candidates.length} 个，少于最低 5 个，已保留原关注列表`)
+  if (candidates.length < 10) throw new Error(`只有 ${candidates.length}/10 个候选通过画像、行情和风险门槛，已保留原关注列表`)
   const previous = new Set(previousAgentCodes)
-  const evidence = candidates.slice(0, 20).map((item) => ({
+  const evidence = candidates.slice(0, 10).map((item) => ({
     code: item.code,
     name: item.name,
     type: item.type,
@@ -85,12 +121,15 @@ export const analyzeWatchlistOpportunities = async (
     changePercent: item.changePercent,
     amount: item.volume,
     technicalEvidence: item.technicalEvidence,
+    strategyLane: item.strategyLane,
+    strategyLabel: item.strategyLabel,
+    suitableFor: item.suitableFor,
     previouslyDiscovered: previous.has(item.code)
   }))
   const prompt = [
     '你正在为“我的关注”页面复核一批候选。系统先扫描股票、ETF、可转债的市场行情，再为候选补充日线趋势、5分钟/15分钟闭合结构、量能和追涨风险。previouslyDiscovered=true 表示它曾由 AI 发现，本轮必须重新分析，不能照搬旧结论。这里是关注发现，不是买入信号。',
-    '只允许分析输入里的证券代码，不得补造新标的、行情、持仓或成交。关注不等于买入；证据不足时降低评分，并在 reasons 里写清楚等待什么。按关注价值从高到低输出，候选不少于 5 个时必须输出 5–10 个，少于 5 个时全部输出。',
-    '评分必须综合日线位置、短周期结构、量能、流动性、当日涨幅和追涨风险；不能只按 screeningScore 重排。technicalEvidence 缺失或状态为 market_unavailable 时应明显降分。股票、ETF、可转债至少覆盖两类；若无法覆盖，要在入选理由中说明另一类为什么没有合格候选。',
+    '只允许分析输入里的证券代码，不得补造新标的、行情、持仓或成交。必须输出恰好 10 个不重复标的，固定覆盖五个策略篮子且每类 2 个：steady=低波动稳健、short_3d=3日内短线、medium_long=中长线趋势、hot_leader=热门主线龙头、limit_up=强势打板观察。strategyLane 由确定性模型分配，AI 只能在同一篮子内解释和重排，禁止改变归属。',
+    '评分必须综合日线位置、短周期结构、量能、流动性、当日涨幅、板块热度、领导力和追涨风险；不能只按 screeningScore 重排。strategy_type=trend 表示趋势机会，oversold_rebound 表示热门板块严重回撤后的止跌反弹机会。高波动本身不是机会：价格位于MA20下方、MA5低于MA20或MA20继续向下的标的，除非已通过主线超跌反弹硬门槛，否则不得推荐。反弹候选必须保留其板块热度、回撤深度和止跌证据；趋势候选优先龙头、领涨和强势标的。limit_up 只表示打板选手的高风险观察池，追涨或封板证据不足时必须写明风险，不能自动变为 buy_ready。technicalEvidence 中的画像、领导力、策略篮子和可负担性已由确定性模型计算，AI 只能解释和重排；technicalEvidence 缺失或状态不是 watching/buy_ready 时不得选择。',
     '仅返回一个 JSON 对象，不要 Markdown。格式：{"opportunities":[{"code":"6位代码","score":0到100的数字,"reasons":["最多3条简短理由"]}]}。',
     `候选证据：${JSON.stringify(evidence)}`
   ].join('\n\n')

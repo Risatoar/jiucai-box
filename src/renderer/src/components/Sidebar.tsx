@@ -1,5 +1,5 @@
 import {
-  Archive, ArchiveRestore, BellRing, BrainCircuit, ChevronDown, ChevronRight, Clock3, Ellipsis, Eye, History, ListPlus,
+  Archive, ArchiveRestore, BarChart3, BellRing, BrainCircuit, ChevronDown, ChevronRight, Clock3, Ellipsis, Eye, History, ListPlus,
   LoaderCircle, Megaphone, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Settings, Star, WalletCards
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -33,6 +33,7 @@ const navItems = [
   { id: 'chat' as const, label: '新增对话', icon: MessageSquarePlus },
   { id: 'portfolio' as const, label: '家庭持仓', icon: WalletCards },
   { id: 'watchlist' as const, label: '我的关注', icon: Star },
+  { id: 'review' as const, label: '交易复盘', icon: BarChart3 },
   { id: 'voc' as const, label: '场外情绪', icon: Megaphone },
   { id: 'strategies' as const, label: '交易规则', icon: BrainCircuit },
   { id: 'automations' as const, label: '定时任务', icon: Clock3 }

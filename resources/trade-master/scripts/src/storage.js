@@ -53,7 +53,7 @@ function defaults() {
 export function initializeStore(force = false) {
     const root = tradeMasterHome();
     mkdirSync(root, { recursive: true });
-    for (const dir of ['strategies/candidates', 'strategies/versions', 'evolution/candidates', 'evolution/versions', 'cases', 'plans', 'reviews', 'badcases', 'market-cache/data', 'runtime/candidate-model/predictions', 'reports', 'replays', 'automation', 'notifications', 'logs']) {
+    for (const dir of ['strategies/candidates', 'strategies/versions', 'evolution/candidates', 'evolution/versions', 'cases', 'plans', 'reviews', 'badcases', 'backtests', 'market-cache/data', 'runtime/candidate-model/predictions', 'reports', 'replays', 'automation', 'notifications', 'logs']) {
         mkdirSync(join(root, dir), { recursive: true });
     }
     const seed = defaults();
@@ -104,6 +104,12 @@ export function loadConfig() {
     const config = readJson(join(tradeMasterHome(), 'config.json'));
     return {
         ...config,
+        refinement: {
+            ...config.refinement,
+            minimum_out_of_sample_accuracy: config.refinement?.minimum_out_of_sample_accuracy ?? 80,
+            minimum_confidence_lower_bound: config.refinement?.minimum_confidence_lower_bound ?? 80,
+            minimum_scenario_coverage: config.refinement?.minimum_scenario_coverage ?? 7,
+        },
         cache: {
             retention_days: config.cache?.retention_days ?? 30,
             max_entries: config.cache?.max_entries ?? 5000,

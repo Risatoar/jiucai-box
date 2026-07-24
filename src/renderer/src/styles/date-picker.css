@@ -1,0 +1,244 @@
+.dp-root {
+  position: relative;
+  min-width: 0;
+}
+
+.dp-trigger {
+  height: 34px;
+  min-width: 190px;
+  padding: 0 9px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.dp-trigger:hover,
+.dp-trigger[aria-expanded="true"] {
+  border-color: #c4c4be;
+  background: #fafaf8;
+}
+
+.dp-trigger > svg:first-child {
+  flex: none;
+  color: var(--muted);
+}
+
+.dp-trigger-text {
+  min-width: 0;
+  flex: 1;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dp-chevron {
+  flex: none;
+  color: var(--subtle);
+  transition: transform 140ms ease;
+}
+
+.dp-chevron.open {
+  transform: rotate(90deg);
+}
+
+.dp-popover {
+  position: absolute;
+  z-index: 40;
+  top: 40px;
+  left: 0;
+  width: 286px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 14px 36px rgba(28, 28, 25, .16), 0 2px 6px rgba(28, 28, 25, .06);
+}
+
+.dp-header {
+  height: 34px;
+  display: grid;
+  grid-template-columns: 30px 1fr 30px;
+  align-items: center;
+}
+
+.dp-title {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.dp-nav {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.dp-nav:hover {
+  background: #f0f0ed;
+  color: var(--text);
+}
+
+.dp-weekdays,
+.dp-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.dp-weekdays {
+  margin: 6px 0 4px;
+  color: var(--subtle);
+  font-size: 9px;
+  text-align: center;
+}
+
+.dp-weekdays span {
+  line-height: 26px;
+}
+
+.dp-cell {
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.dp-cell:not(.dp-empty):hover {
+  background: #f0f0ed;
+}
+
+.dp-cell.today {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.dp-cell.selected {
+  background: #252523;
+  color: #fff;
+  font-weight: 700;
+}
+
+.dp-cell.week-selected {
+  border-radius: 4px;
+  background: #e9f2ec;
+  color: #17663d;
+  font-weight: 700;
+}
+
+.dp-cell.week-selected:hover {
+  background: #dceade;
+}
+
+.dp-cell.week-selected.disabled {
+  background: #f2f5f2;
+  color: #b8c0ba;
+}
+
+.dp-cell.disabled {
+  color: #c9c9c4;
+  cursor: default;
+}
+
+.dp-month-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  padding: 8px 2px 4px;
+}
+
+.dp-month {
+  height: 38px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: #f5f5f2;
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.dp-month:hover:not(:disabled) {
+  border-color: #d7d7d1;
+  background: #ededE9;
+}
+
+.dp-month.selected {
+  border-color: #252523;
+  background: #252523;
+  color: #fff;
+  font-weight: 700;
+}
+
+.dp-month:disabled {
+  color: #c9c9c4;
+  background: #fafaf8;
+  cursor: default;
+}
+
+.dp-footer {
+  margin-top: 7px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dp-footer-hint {
+  color: var(--subtle);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.dp-today {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dp-today:hover:not(:disabled) {
+  background: #f5f5f2;
+}
+
+.dp-today:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+@media (max-width: 620px) {
+  .dp-root,
+  .dp-trigger {
+    width: 100%;
+  }
+
+  .dp-popover {
+    width: min(286px, calc(100vw - 48px));
+  }
+}

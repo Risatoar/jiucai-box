@@ -1,0 +1,324 @@
+/* ---- 星级评价 ---- */
+.review-rating-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+.review-rating-row > span {
+  font-size: 12px;
+  color: var(--muted);
+  margin-right: 4px;
+  font-weight: 600;
+}
+.review-star {
+  border: 0;
+  background: transparent;
+  padding: 2px;
+  cursor: pointer;
+  color: #d8d8d3;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.review-star:hover { color: #e6a817; transform: scale(1.1); }
+.review-star.active { color: #e6a817; }
+
+/* ---- 走势小图 ---- */
+.review-sparkline {
+  margin: 12px 0 4px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #fafaf8;
+  border: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.review-sparkline svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.review-sparkline-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--subtle);
+  font-variant-numeric: tabular-nums;
+}
+.review-sparkline-empty {
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+/* ---- AI 总结 callout ---- */
+.review-ai-summary {
+  margin: 0 0 14px;
+  padding: 14px 18px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #f3f6fb, #eef3f9);
+  border: 1px solid #dce5f0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #44443f;
+}
+.review-ai-summary strong { color: var(--blue); }
+
+/* ---- 汇总分析 ---- */
+.review-aggregate {
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--panel);
+  padding: 24px 26px;
+  margin-top: 28px;
+  box-shadow: 0 2px 8px rgba(32, 32, 30, 0.04);
+}
+.review-aggregate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.review-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 10px;
+  background: #fafaf8;
+  border: 1px solid var(--border-soft);
+}
+.review-metric-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.review-metric strong {
+  font-size: 22px;
+  color: var(--text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.review-metric strong small {
+  font-size: 12px;
+  color: var(--subtle);
+  font-weight: 600;
+  margin-left: 4px;
+}
+.review-metric strong.verified { color: var(--green); }
+.review-metric strong.failed { color: var(--red); }
+.review-metric strong.up { color: var(--red); }
+.review-metric strong.down { color: var(--green); }
+.review-blindspots,
+.review-suggestions {
+  margin-top: 14px;
+  padding: 13px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.review-blindspots { background: var(--red-soft); color: var(--red); }
+.review-suggestions { background: var(--green-soft); color: var(--green); }
+.review-blindspots ul,
+.review-suggestions ul { margin: 6px 0 0; padding-left: 20px; }
+
+/* ---- 错误 / 加载 / 空态 ---- */
+.review-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 14px 18px;
+  border: 1px solid #f1c9c5;
+  border-radius: 11px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.review-error svg { flex-shrink: 0; margin-top: 2px; }
+.review-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 72px 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.review-empty {
+  padding: 52px 24px;
+  text-align: center;
+  color: var(--subtle);
+  font-size: 13px;
+  background: var(--panel);
+  border: 1px dashed var(--border-soft);
+  border-radius: 12px;
+}
+
+
+/* ===== 市场总览（全市场数据，非用户持仓） ===== */
+.review-market-overview {
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--panel);
+  padding: 22px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(32, 32, 30, 0.04);
+}
+.review-market-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.review-market-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #fafaf8;
+  border: 1px solid var(--border-soft);
+}
+.review-market-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.review-market-card strong {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.review-market-card strong.up { color: var(--red); }
+.review-market-card strong.down { color: var(--green); }
+.review-market-regime { text-transform: capitalize; }
+.review-market-card small {
+  font-size: 11px;
+  color: var(--subtle);
+  font-variant-numeric: tabular-nums;
+}
+.review-themes {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+}
+.review-themes-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.review-themes-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.review-theme-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #fafaf8;
+  border: 1px solid var(--border-soft);
+  font-size: 13px;
+  line-height: 1;
+}
+.review-theme-chip strong {
+  font-weight: 700;
+  color: var(--text);
+}
+.review-theme-chip .up { color: var(--red); font-weight: 700; font-variant-numeric: tabular-nums; }
+.review-theme-chip .down { color: var(--green); font-weight: 700; font-variant-numeric: tabular-nums; }
+.review-theme-chip small { color: var(--subtle); font-size: 11px; }
+.review-theme-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* ---- 信号卡片压缩 ---- */
+.review-signal-row.compact {
+  padding: 12px 16px;
+  gap: 6px;
+}
+.review-signal-row.compact .review-signal-header {
+  margin-bottom: 6px;
+  gap: 10px;
+}
+.review-signal-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.review-signal-time {
+  font-size: 11px;
+  color: var(--subtle);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.review-signal-row.compact .review-signal-meta {
+  gap: 14px;
+  margin: 2px 0 6px;
+  font-size: 12px;
+}
+.review-signal-row.compact .review-signal-summary {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 4px 0 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.review-signal-bottom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.review-signal-bottom .review-sparkline {
+  flex: 1;
+  min-width: 120px;
+  max-width: 240px;
+  margin: 0;
+  padding: 6px 10px;
+}
+.review-signal-bottom .review-rating-row {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* ---- 标的名点击交互 ---- */
+.review-hotstock-name,
+.review-signal-name,
+.review-candidate-name {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.review-hotstock-name:hover,
+.review-signal-name:hover,
+.review-candidate-name:hover {
+  opacity: 0.75;
+}

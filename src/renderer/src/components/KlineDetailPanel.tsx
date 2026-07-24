@@ -2,6 +2,7 @@ import { ChevronUp, Minus, Plus, RotateCcw } from 'lucide-react'
 import { useEffect, useMemo, useState, type PointerEvent, type WheelEvent } from 'react'
 import type { ChartPeriod, MarketBar, WatchItem } from '../../../shared/types'
 import { KlineIndicatorPane, type SubIndicator } from './KlineIndicatorPane'
+import { SignalHistoryPanel } from './SignalHistoryPanel'
 import { bollingerBands, clampVisibleCount, cumulativeAveragePrice, exponentialMovingAverage, formatBarTime, formatVolume, movingAverage } from './kline-chart-utils'
 
 interface KlineDetailPanelProps {
@@ -143,6 +144,7 @@ export function KlineDetailPanel({ item, bars, period, loading, error, refreshed
         </div>
         {bars.length > 0 && <KlineIndicatorPane bars={bars} startIndex={startIndex} visibleCount={visibleBars.length} hoverIndex={hoverIndex} indicator={subIndicator} onHover={setHoverIndex} />}
         <footer className="kline-footer"><span>{visibleBars.length ? `${periodLabel(period)} · 显示 ${visibleBars.length} / ${bars.length} 根` : '暂无行情'}</span><span>滚轮缩放 · 悬浮联动主图与指标</span></footer>
+        <SignalHistoryPanel code={item.code} name={item.name} />
       </>
     </section>
   )

@@ -1,7 +1,8 @@
 import { Check, ChevronDown, CircleCheck, CircleDashed, CircleX, Clipboard, Info, Landmark, ListChecks, RotateCcw, ShieldAlert, Sparkles } from 'lucide-react'
-import { Fragment, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import type { ChatMessage } from '../../../shared/types'
 import { buildMessagePresentation, type MessageEntityGroup, type MessageResultState, type MessageSection } from '../utils/message-presentation'
+import { MarkdownBlock } from './MarkdownBlock'
 
 interface RichMessageContentProps {
   content: string
@@ -36,7 +37,7 @@ function InlineText({ text, onOpenLink }: { text: string; onOpenLink?: (url: str
 function SectionContent({ section, onOpenLink }: { section: MessageSection; onOpenLink?: (url: string) => void }) {
   const List = section.ordered ? 'ol' : 'ul'
   return <div className="message-module-section-body">
-    {section.paragraphs.map((paragraph, index) => <p key={index}><InlineText text={paragraph} onOpenLink={onOpenLink} /></p>)}
+    {section.paragraphs.map((paragraph, index) => <MarkdownBlock key={index} content={paragraph} onOpenLink={onOpenLink} />)}
     {section.items.length > 0 && <List>{section.items.map((item, index) => <li key={index}><InlineText text={item} onOpenLink={onOpenLink} /></li>)}</List>}
   </div>
 }
@@ -94,17 +95,19 @@ const followUps = (state?: MessageResultState) => state === 'error'
 export function RichMessageContent({ content, status, coveredInstruments = [], coveredAccounts = [], disabled, retrying, onFollowUp, onRetry, onOpenLink }: RichMessageContentProps) {
   const [copied, setCopied] = useState(false)
   const [showRaw, setShowRaw] = useState(false)
-  const presentation = buildMessagePresentation(content, status)
-  const covered = new Set(coveredInstruments)
-  const coveredAccountSet = new Set(coveredAccounts)
-  const visibleGroups = presentation.groups.flatMap((group) => {
-    if (group.instrument && covered.has(group.instrument.code)) return []
-    if (!group.account) return [group]
-    const instruments = group.instruments.filter((instrument) => !instrument.instrument || !covered.has(instrument.instrument.code))
-    const accountScope = `${group.account.member} → ${group.account.name}`
-    if (coveredAccountSet.has(accountScope)) return instruments.length ? [{ ...group, sections: [], instruments }] : []
-    return group.sections.length || instruments.length ? [{ ...group, instruments }] : []
-  })
+  const presentation = useMemo(() => buildMessagePresentation(content, status), [content, status])
+  const visibleGroups = useMemo(() => {
+    const covered = new Set(coveredInstruments)
+    const coveredAccountSet = new Set(coveredAccounts)
+    return presentation.groups.flatMap((group) => {
+      if (group.instrument && covered.has(group.instrument.code)) return []
+      if (!group.account) return [group]
+      const instruments = group.instruments.filter((instrument) => !instrument.instrument || !covered.has(instrument.instrument.code))
+      const accountScope = `${group.account.member} → ${group.account.name}`
+      if (coveredAccountSet.has(accountScope)) return instruments.length ? [{ ...group, sections: [], instruments }] : []
+      return group.sections.length || instruments.length ? [{ ...group, instruments }] : []
+    })
+  }, [coveredAccounts, coveredInstruments, presentation.groups])
   if (!content.trim()) return null
   const copy = async () => {
     await navigator.clipboard?.writeText(content)
@@ -121,7 +124,7 @@ export function RichMessageContent({ content, status, coveredInstruments = [], c
       {presentation.structured && <Sparkles size={13} />}<p><InlineText text={presentation.lead} onOpenLink={onOpenLink} /></p>
     </div>}
     {presentation.paragraphs.length > 0 && <div className="message-paragraphs">
-      {presentation.paragraphs.map((paragraph, index) => <p key={index}><InlineText text={paragraph} onOpenLink={onOpenLink} /></p>)}
+      {presentation.paragraphs.map((paragraph, index) => <MarkdownBlock key={index} content={paragraph} onOpenLink={onOpenLink} />)}
     </div>}
     {visibleGroups.length > 0 && <div className="message-entity-groups">
       {visibleGroups.map((group) => <MessageEntityGroupModule group={group} key={group.id} onOpenLink={onOpenLink} />)}

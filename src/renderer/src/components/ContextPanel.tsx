@@ -1,5 +1,5 @@
 import {
-  Bot, BrainCircuit, Check, CheckCircle2, CircleDollarSign, Clock3, Database,
+  BarChart3, Bot, BrainCircuit, Check, CheckCircle2, CircleDollarSign, Clock3, Database,
   Landmark, MessageSquareText, PauseCircle, Plus, Radio, ShieldCheck, Star, TriangleAlert, X
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -11,7 +11,7 @@ import { MarketInsightContent } from './InsightPanel'
 import { disciplineLabel } from '../utils/snapshot'
 
 type DockView = Exclude<AppView, 'settings' | 'voc'>
-const dockViews: DockView[] = ['chat', 'portfolio', 'watchlist', 'strategies', 'automations']
+const dockViews: DockView[] = ['chat', 'portfolio', 'watchlist', 'review', 'strategies', 'automations']
 const isDockView = (value: unknown): value is DockView => typeof value === 'string' && dockViews.includes(value as DockView)
 const loadTabs = (fallback: DockView) => {
   try {
@@ -109,24 +109,19 @@ function PortfolioContext({ positions, totalAsset }: { positions: Position[]; to
 
 function StrategyContext({ strategies }: { strategies: StrategyDefinition[] }) {
   const active = strategies.filter((strategy) => strategy.status === 'active')
-  const validating = strategies.filter((strategy) => ['shadow', 'candidate'].includes(strategy.status))
-  const ready = strategies.filter((strategy) => strategy.evidence.history >= 30 && strategy.evidence.outOfSample >= 10 && strategy.evidence.shadowDays >= 5)
   return (
     <div className="context-tool-body">
       <div className="context-metrics compact">
         <div><span>正在使用</span><strong>{active.length}</strong></div>
-        <div><span>验证中</span><strong>{validating.length}</strong></div>
-        <div><span>验证完成</span><strong>{ready.length}</strong></div>
         <div><span>已暂停</span><strong>{strategies.filter((strategy) => strategy.status === 'paused').length}</strong></div>
       </div>
       <section className="context-section">
-        <div className="context-section-title"><span>交易规则</span><small>{strategies.length} 条</small></div>
-        {strategies.length ? <div className="context-strategy-list">{strategies.slice(0, 6).map((strategy) => {
-          const evidenceReady = strategy.evidence.history >= 30 && strategy.evidence.outOfSample >= 10 && strategy.evidence.shadowDays >= 5
-          return <div key={strategy.id}><span className={`strategy-status-dot ${strategy.status}`} /><span><strong>{strategy.name}</strong><small>{strategy.family} · v{strategy.version}</small></span><em className={evidenceReady ? 'pass' : 'warn'}>{evidenceReady ? '验证完成' : '验证中'}</em></div>
-        })}</div> : <div className="context-empty"><BrainCircuit size={18} /><strong>还没有交易规则</strong><span>新规则建立后，会在这里显示验证进度。</span></div>}
+        <div className="context-section-title"><span>交易规则</span><small>{active.length} 条</small></div>
+        {active.length ? <div className="context-strategy-list">{active.slice(0, 6).map((strategy) => (
+          <div key={strategy.id}><span className="strategy-status-dot active" /><span><strong>{strategy.name}</strong><small>{strategy.source === 'ai-evolved' ? 'AI 整理' : '已启用'}</small></span><em className="pass">使用中</em></div>
+        ))}</div> : <div className="context-empty"><BrainCircuit size={18} /><strong>还没有交易规则</strong><span>告诉 AI 你想解决的问题，它会帮你整理成规则。</span></div>}
       </section>
-      <div className="context-note"><ShieldCheck size={14} /><p>新规则要先用历史和新行情验证，通过后才能正式使用。</p></div>
+      <div className="context-note"><ShieldCheck size={14} /><p>AI 只分析和提醒，不会自动下单，也不会修改你的持仓。</p></div>
     </div>
   )
 }
@@ -190,7 +185,8 @@ export function ContextPanel(props: ContextPanelProps) {
     { view: 'portfolio', tab: '账户', title: '家庭账户概览', description: `现在持有 ${activePositions} 笔账户持仓`, icon: Landmark, content: <PortfolioContext positions={props.positions} totalAsset={props.totalAsset} /> },
     { view: 'watchlist', tab: '行情', title: '行情详情', description: props.item ? `${props.item.name} · ${props.item.code}` : '行情、K 线和下单前检查', icon: Star, content: <div className="context-tool-body market-tool-body"><MarketInsightContent item={props.item} watchlist={props.watchlist} bars={props.bars} chartLoading={props.chartLoading} chartError={props.chartError} gates={props.gates} period={props.period} onPeriod={props.onPeriod} onSelectItem={props.onSelectItem} positions={props.positions} strategies={props.strategies} discipline={props.discipline} /></div> },
     { view: 'strategies', tab: '规则', title: '交易规则', description: `${props.strategies.filter((strategy) => strategy.status === 'active').length} 条正在使用`, icon: BrainCircuit, content: <StrategyContext strategies={props.strategies} /> },
-    { view: 'automations', tab: '任务', title: '定时任务', description: `${props.automations.filter((task) => task.enabled).length} 个已开启`, icon: Clock3, content: <AutomationContext tasks={props.automations} /> }
+    { view: 'automations', tab: '任务', title: '定时任务', description: `${props.automations.filter((task) => task.enabled).length} 个已开启`, icon: Clock3, content: <AutomationContext tasks={props.automations} /> },
+    { view: 'review', tab: '复盘', title: '交易复盘', description: '市场评估、热门板块与 AI 推荐复核', icon: BarChart3, content: <div className="context-tool-body"><div className="context-note"><BarChart3 size={14} /><p>复盘报告按日报、周报、月报缓存。切换日期或周期后会自动重新生成，AI 模型不可用时会保留错误提示而不是崩溃。</p></div></div> }
   ]
   const toolByView = (view: DockView) => tools.find((tool) => tool.view === view)!
   const openTool = (view: DockView) => {

@@ -1,0 +1,203 @@
+/* 复盘页：贴合桌面工作台密度，避免退化成大留白网页。 */
+.review-view {
+  padding: 22px max(24px, calc((100% - 1120px) / 2)) 48px;
+  background: #f8f8f6;
+}
+
+.review-view .view-heading {
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.review-view .view-heading > div:first-child {
+  min-width: 0;
+}
+
+.review-view .view-heading h1 {
+  margin-bottom: 4px;
+  font-size: 20px;
+}
+
+.review-view .view-heading h1::before {
+  width: 3px;
+  height: 20px;
+  border-radius: 2px;
+  background: var(--red);
+}
+
+.review-view .view-heading p {
+  max-width: 760px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.review-view .heading-actions .secondary-button {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+.review-view .heading-actions .secondary-button:disabled {
+  opacity: .68;
+}
+
+.review-toolbar {
+  min-height: 48px;
+  margin-bottom: 16px;
+  padding: 6px;
+  gap: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(32, 32, 30, .03);
+}
+
+.review-toolbar .segmented-control {
+  padding: 2px;
+  gap: 1px;
+  border: 0;
+  border-radius: 6px;
+  background: #f0f0ed;
+  box-shadow: none;
+}
+
+.review-toolbar .segmented-control button {
+  min-height: 30px;
+  min-width: 68px;
+  padding: 0 14px;
+  border-radius: 5px;
+  font-size: 12px;
+  transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.review-toolbar .segmented-control button:hover {
+  background: rgba(255, 255, 255, .7);
+}
+
+.review-toolbar .segmented-control button.active {
+  background: #fff;
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(32, 32, 30, .12);
+}
+
+.review-index-assessment,
+.review-market-overview,
+.review-aggregate {
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(32, 32, 30, .035);
+}
+
+.review-index-assessment {
+  padding: 20px 22px;
+}
+
+.review-index-assessment::before {
+  top: 16px;
+  right: auto;
+  bottom: 16px;
+  width: 3px;
+  height: auto;
+  background: var(--green);
+}
+
+.review-market-overview {
+  padding: 18px 20px;
+}
+
+.review-market-card,
+.review-metric {
+  border-radius: 7px;
+}
+
+.review-section-title {
+  margin: 22px 0 12px;
+  font-size: 14px;
+}
+
+.review-tabs {
+  margin: 18px 0 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.review-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.review-tab {
+  flex: none;
+  padding: 9px 12px 10px;
+  font-size: 12px;
+}
+
+.review-sector-card,
+.review-hotstock-row,
+.review-candidate-row,
+.review-signal-row,
+.review-summary,
+.review-empty,
+.review-ai-summary {
+  border-radius: 8px;
+}
+
+.review-sector-card:hover,
+.review-hotstock-row:hover,
+.review-candidate-row:hover,
+.review-signal-row:hover {
+  transform: none;
+  box-shadow: 0 2px 7px rgba(32, 32, 30, .06);
+}
+
+@media (max-width: 860px) {
+  .review-view {
+    padding: 18px;
+  }
+
+  .review-view .view-heading {
+    align-items: center;
+  }
+
+  .review-market-grid,
+  .review-aggregate-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .review-sector-body {
+    padding: 4px 18px 16px;
+  }
+}
+
+@media (max-width: 620px) {
+  .review-view .view-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .review-view .heading-actions,
+  .review-view .heading-actions .secondary-button {
+    width: 100%;
+  }
+
+  .review-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .review-toolbar .segmented-control {
+    width: 100%;
+  }
+
+  .review-toolbar .segmented-control button {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .review-sector-header {
+    padding: 14px;
+  }
+
+  .review-sector-stage,
+  .review-sector-trend {
+    display: none;
+  }
+}

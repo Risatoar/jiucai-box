@@ -99,7 +99,7 @@ describe('automationsFromSnapshot', () => {
     })
 
     expect(tasks).toMatchObject([
-      { title: '盘中候选池刷新', description: '发掘最多5个低风险、高置信度买入观察机会，并更新AI推荐关注列表' },
+      { title: '盘中候选池刷新', description: '全市场筛选五类策略各2只，共10只候选，并单独标出买入就绪标的' },
       { title: '午盘复盘', description: '总结上午盘面，并整理下午的操作重点' }
     ])
   })
