@@ -33,14 +33,17 @@ const nextActionTone = (item: WatchItem) => item.nextAction === '人工复核买
 
 const typeLabel = (type: WatchItem['type']) => type === 'stock' ? '股票' : type === 'etf' ? 'ETF' : '可转债'
 
-const sectorLabel = (item: WatchItem): string => {
-  if (item.type !== 'stock') return ''
-  return item.sector || item.theme || ''
+const conceptTags = (item: WatchItem): string[] => {
+  if (item.type !== 'stock') return []
+  if (Array.isArray(item.concepts) && item.concepts.length) return item.concepts
+  if (item.sector) return [item.sector]
+  if (item.theme) return [item.theme]
+  return []
 }
 
 const groupValue = (item: WatchItem, key: GroupKey): string => {
   if (key === 'type') return typeLabel(item.type)
-  if (key === 'sector') return item.type === 'stock' ? (sectorLabel(item) || '未识别板块') : '非股票'
+  if (key === 'sector') return item.type === 'stock' ? (conceptTags(item)[0] || '未识别板块') : '非股票'
   if (key === 'source') return item.source === 'agent' ? 'AI 发现' : '我的收藏'
   return ''
 }
@@ -161,11 +164,11 @@ export function WatchlistView({ items, selected, bars, period, chartLoading, cha
 
   const renderRow = (item: WatchItem) => {
     const expanded = expandedCode === item.code
-    const sector = sectorLabel(item)
+    const concepts = conceptTags(item)
     const board = item.type === 'stock' && item.board && item.board !== 'other' ? boardLabel(item.board) : ''
     return <Fragment key={item.code}>
       <tr className={`watchlist-row ${selected?.code === item.code ? 'selected' : ''} ${expanded ? 'expanded' : ''}`} tabIndex={0} aria-expanded={expanded} onClick={() => toggleExpanded(item)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleExpanded(item) } }}>
-        <td><div className="instrument-cell"><span className="asset-badge">{item.type === 'cbond' ? '债' : item.type === 'etf' ? 'E' : '股'}</span><div className="instrument-name-wrap"><div className="instrument-name-line"><strong>{item.name}</strong>{sector && <span className="sector-tag" title={sector}>{sector}</span>}</div><small>{item.code} · {item.exchange}{board ? <span className="board-sub"> · {board}</span> : ''}</small></div></div></td>
+        <td><div className="instrument-cell"><span className="asset-badge">{item.type === 'cbond' ? '债' : item.type === 'etf' ? 'E' : '股'}</span><div className="instrument-name-wrap"><div className="instrument-name-line"><strong>{item.name}</strong>{concepts.slice(0, 2).map((tag) => <span className="sector-tag" key={tag} title={tag}>{tag}</span>)}</div><small>{item.code} · {item.exchange}{board ? <span className="board-sub"> · {board}</span> : ''}</small></div></div></td>
         <td><span className="type-pill type-{item.type}">{typeLabel(item.type)}</span></td>
         <td>{item.source === 'agent' ? <span className="source-badge agent"><Bot size={12} />AI 发现</span> : <span className="source-badge user"><Star size={12} />我的收藏</span>}</td>
         <td className="number-cell">{item.latestPrice > 0 ? item.latestPrice.toFixed(item.latestPrice < 10 ? 3 : 2) : '--'}</td>

@@ -65,6 +65,7 @@ interface RawWatchItem {
   reasons?: string[]
   theme?: string
   industry?: string
+  concepts?: string[]
 }
 
 const STOCK_BOARD_PREFIXES: Record<string, string[]> = {
@@ -117,6 +118,7 @@ export const watchlistFromSnapshot = (snapshot: TradeMasterSnapshot | null): Wat
     board: inferStockBoard(item.code || '--', item.type === 'stock' || item.type === 'etf' ? item.type : 'cbond'),
     theme: item.theme || item.industry || undefined,
     sector: item.theme || item.industry || undefined,
+    concepts: Array.isArray(item.concepts) && item.concepts.length ? item.concepts : undefined,
   }))
   const portfolio = snapshot?.portfolio as { positions?: RawPosition[] } | null
   const householdPositions = snapshot?.household?.accounts.flatMap((account) => account.positions.map((position) => ({

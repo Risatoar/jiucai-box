@@ -101,6 +101,7 @@ export interface WatchItem extends Instrument {
   reasons?: string[]
   sector?: string
   theme?: string
+  concepts?: string[]
   board?: 'main_sh' | 'main_sz' | 'chinext' | 'star' | 'other'
 }
 

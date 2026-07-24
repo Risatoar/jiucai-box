@@ -74,9 +74,12 @@ function buildCandidateReasons(candidate) {
     const typeLabel = candidate.type === 'stock' ? '股票' : candidate.type === 'etf' ? 'ETF' : '可转债';
     const theme = candidate.market_context?.theme || candidate.theme;
     const industry = candidate.market_context?.industry || candidate.industry;
+    const concepts = candidate.concepts?.length ? candidate.concepts : (candidate.market_context?.concepts || []);
     const lane = candidate.strategy_lane_label || candidate.strategy_lane;
     const reasons = [];
-    if (theme)
+    if (concepts.length)
+        reasons.push(`${concepts.slice(0, 2).join('、')}概念`);
+    else if (theme)
         reasons.push(`属于${theme}热门概念`);
     else if (industry)
         reasons.push(`所属${industry}行业`);
@@ -119,6 +122,7 @@ function syncAiRecommendations(watchlist, candidates) {
             nextAction: nextAction(candidate),
             theme: candidate.market_context?.theme || candidate.theme || null,
             industry: candidate.market_context?.industry || candidate.industry || null,
+            concepts: candidate.concepts?.length ? candidate.concepts : (candidate.market_context?.concepts || []),
             model_version: CANDIDATE_MODEL_VERSION,
             status: 'active',
             source: 'agent',
