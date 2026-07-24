@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MarketInsightRequest } from '../shared/types'
-import { marketInsightCacheKey, parseMarketInsight } from './market-insight'
+import { marketInsightCacheKey, parseMarketInsight, unifiedModelDecisionPoints } from './market-insight'
 
 const request: MarketInsightRequest = {
   item: { code: '159516', name: '半导体设备ETF国泰', type: 'etf', exchange: 'SZ', latestPrice: 0.661, changePercent: -5.71, volume: '61.15亿', score: 0, source: 'user', signal: '未评估', refreshedAt: '15:34:36' },
@@ -34,5 +34,19 @@ describe('market insight parser', () => {
     const current = marketInsightCacheKey(request)
     expect(marketInsightCacheKey({ ...request, discipline: 'NORMAL' })).not.toBe(current)
     expect(marketInsightCacheKey({ ...request, gates: request.gates.map((gate) => ({ ...gate, state: 'pass' })) })).not.toBe(current)
+  })
+
+  it('only turns the unified closed actionable trigger into intraday points', () => {
+    expect(unifiedModelDecisionPoints([{
+      account_scope: '我 → 我的主账户',
+      position_guidance: { state: 'range_low_add', trigger_signal_id: 'buy-1' },
+      latest_signals: [
+        { id: 'forming', side: 'buy', level: 'actionable', kState: 'forming', price: 10.1, reasons: ['形成中'] },
+        { id: 'buy-1', side: 'buy', level: 'actionable', kState: 'closed', price: 9.8, reasons: ['区间下沿止跌'], invalidation: '跌破9.6' }
+      ]
+    }])).toEqual({
+      buyPoints: [{ label: '统一模型买点', price: '9.8', condition: '区间下沿止跌', accountScope: '我 · 我的主账户' }],
+      sellPoints: []
+    })
   })
 })

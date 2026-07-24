@@ -8,3 +8,9 @@ export const normalizeAiTimeoutSeconds = (value?: number): number => {
 }
 
 export const resolveAiTimeoutMs = (value?: number): number => normalizeAiTimeoutSeconds(value) * 1000
+
+export const normalizeCodexCliModel = (value?: string): string => {
+  const selected = value?.trim() || ''
+  const legacyRelaySelection = /^auto_model\/([^/]+)$/.exec(selected)
+  return legacyRelaySelection?.[1] || selected
+}

@@ -21,17 +21,25 @@ describe('sendAiMessage attachments', () => {
     expect(requestBody).toContain('data:text/plain;base64')
   })
 
-  it('isolates unattended Codex runs from interactive MCP and user configuration', () => {
-    const args = buildCodexExecArgs({ provider: 'codex-local', baseUrl: '', model: 'gpt-5' }, [], 'automation')
-    expect(args).toEqual(expect.arrayContaining(['--ephemeral', '--ignore-user-config', '--ignore-rules', '--sandbox', 'read-only']))
-    expect(args).not.toContain('--model')
-    expect(args).not.toContain('gpt-5')
+  it('keeps unattended Codex runs ephemeral and read-only while preserving local model routing', () => {
+    const args = buildCodexExecArgs({ provider: 'codex-local', baseUrl: '', model: 'api-model', codexModel: 'gpt-5.6-terra' }, [], 'automation')
+    expect(args).toEqual(expect.arrayContaining(['--ephemeral', '--ignore-rules', '--sandbox', 'read-only']))
+    expect(args).not.toContain('--ignore-user-config')
+    expect(args).toEqual(expect.arrayContaining(['--model', 'gpt-5.6-terra']))
+    expect(args).not.toContain('api-model')
     expect(args.at(-1)).toBe('-')
   })
 
-  it('isolates memory extraction from tools and user configuration', () => {
+  it('passes the bare alias for a managed third-party Codex model', () => {
+    const args = buildCodexExecArgs({ provider: 'codex-local', baseUrl: '', model: '', codexModel: 'auto_model/alwaysday1' }, [], 'chat')
+    expect(args).toEqual(expect.arrayContaining(['--model', 'alwaysday1']))
+    expect(args).not.toContain('auto_model/alwaysday1')
+  })
+
+  it('keeps memory extraction ephemeral and read-only', () => {
     const args = buildCodexExecArgs({ provider: 'codex-local', baseUrl: '', model: 'gpt-5' }, [], 'memory')
-    expect(args).toEqual(expect.arrayContaining(['--ephemeral', '--ignore-user-config', '--ignore-rules', '--sandbox', 'read-only']))
+    expect(args).toEqual(expect.arrayContaining(['--ephemeral', '--ignore-rules', '--sandbox', 'read-only']))
+    expect(args).not.toContain('--ignore-user-config')
   })
 
   it('keeps only the useful Codex error instead of storing the full process log', () => {
@@ -87,6 +95,7 @@ describe('sendAiMessage attachments', () => {
   it('enables Codex JSONL output for interactive streaming', () => {
     const args = buildCodexExecArgs({ provider: 'codex-local', baseUrl: '', model: '' }, [], 'chat', true, '/tmp/trade-master')
     expect(args).toContain('--json')
+    expect(args).not.toContain('--model')
     expect(args).toEqual(expect.arrayContaining(['--sandbox', 'workspace-write', '--cd', '/tmp/trade-master']))
     expect(args).toEqual(expect.arrayContaining(['-c', 'approval_policy="never"']))
   })

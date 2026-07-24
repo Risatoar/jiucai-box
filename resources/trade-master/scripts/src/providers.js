@@ -1,4 +1,5 @@
 import { SinaUniverseProvider } from './sina-provider.js';
+import { fetchEastmoneySectorSnapshot } from './eastmoney-sector-snapshot.js';
 export { normalizeSinaBar, normalizeSinaUniverseRow } from './sina-provider.js';
 
 function number(value, divisor = 1) {
@@ -133,7 +134,7 @@ export class EastmoneyProvider {
             : type === 'etf'
                 ? 'b:MK0021,b:MK0022,b:MK0023,b:MK0024'
                 : 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048';
-        const fields = 'f12,f13,f14,f2,f3,f5,f6,f7,f8,f15,f16,f17,f18';
+        const fields = 'f12,f13,f14,f2,f3,f5,f6,f7,f8,f15,f16,f17,f18,f100';
         const rows = [];
         const pageSize = 100;
         for (let page = 1; page <= 80; page += 1) {
@@ -174,6 +175,7 @@ export class EastmoneyProvider {
                 return null;
             return {
                 instrument,
+                industry: type === 'stock' && item.f100 ? String(item.f100) : null,
                 price,
                 changeRatio: number(item.f3, 100),
                 volume: number(item.f5),
@@ -188,6 +190,9 @@ export class EastmoneyProvider {
                 collectedAt,
             };
         }).filter((item) => item != null);
+    }
+    async listSectorSnapshot() {
+        return fetchEastmoneySectorSnapshot(fetchJson, this.timeoutMs);
     }
     async searchInstruments(query) {
         const normalized = query.trim();
@@ -218,7 +223,7 @@ export class EastmoneyProvider {
     }
     async getInstrument(code) {
         const instrument = inferInstrument(code);
-        const fields = 'f57,f58,f84,f85,f116,f117,f162,f167';
+        const fields = 'f57,f58,f84,f85,f116,f117,f162,f167,f127,f128';
         const payload = await fetchJson(`https://push2.eastmoney.com/api/qt/stock/get?secid=${instrument.quoteId}&fltt=2&fields=${fields}`, this.timeoutMs);
         const data = payload.data;
         if (!data)
@@ -234,6 +239,8 @@ export class EastmoneyProvider {
                 float_market_cap: number(data.f117),
                 pe_dynamic: number(data.f162),
                 pb: number(data.f167),
+                industry: data.f127 ? String(data.f127) : null,
+                concept: data.f128 ? String(data.f128) : null,
             },
             source: this.id,
         };

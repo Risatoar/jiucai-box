@@ -1,7 +1,7 @@
 import { BellRing, Bot, Brain, Check, ChevronRight, Database, Download, ExternalLink, KeyRound, MessageCircle, Monitor, RefreshCw, Save, Search, Send, ShieldCheck, UserRound, UsersRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { AiConfig, AppUpdateStatus, DesktopIntegrationStatus, FeishuChat, FeishuChatSearchResult, FeishuConfigInput, FeishuConnectionResult, FeishuConversationStatus, UserProfile } from '../../../shared/types'
-import { DEFAULT_AI_TIMEOUT_SECONDS, MAX_AI_TIMEOUT_SECONDS, MIN_AI_TIMEOUT_SECONDS, normalizeAiTimeoutSeconds } from '../../../shared/ai-config'
+import type { AiConfig, AppUpdateStatus, CodexModelOption, DesktopIntegrationStatus, FeishuChat, FeishuChatSearchResult, FeishuConfigInput, FeishuConnectionResult, FeishuConversationStatus, UserProfile } from '../../../shared/types'
+import { DEFAULT_AI_TIMEOUT_SECONDS, MAX_AI_TIMEOUT_SECONDS, MIN_AI_TIMEOUT_SECONDS, normalizeAiTimeoutSeconds, normalizeCodexCliModel } from '../../../shared/ai-config'
 import { ProfileSettingsPanel } from './ProfileSettingsPanel'
 import { MemorySettingsPanel } from './MemorySettingsPanel'
 import { FeishuConversationPanel } from './FeishuConversationPanel'
@@ -49,6 +49,10 @@ const nav = [
 ] as const
 
 const maskedReceiver = (value: string) => value.length > 10 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value
+const providerOptions: Array<{ id: AiConfig['provider']; title: string; desc: string }> = [
+  { id: 'codex-local', title: '本地 Codex', desc: '使用这台电脑已登录的 Codex，无需单独填写 API Key' },
+  { id: 'openai-compatible', title: 'API 接入', desc: '使用 API 地址、模型 ID 和访问密钥连接 AI 服务' }
+]
 
 export function SettingsView(props: SettingsViewProps) {
   const [tab, setTab] = useState<Tab>(props.initialTab ?? 'profile')
@@ -66,6 +70,45 @@ export function SettingsView(props: SettingsViewProps) {
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus | null>(null)
   const [updateBusy, setUpdateBusy] = useState(false)
   const [disciplineBusy, setDisciplineBusy] = useState(false)
+  const [codexModels, setCodexModels] = useState<CodexModelOption[]>([])
+  const [codexModelsState, setCodexModelsState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const [codexModelsError, setCodexModelsError] = useState('')
+  useEffect(() => {
+    setDraft(props.aiConfig)
+    setCodexModelsState('idle')
+  }, [props.aiConfig])
+  const refreshCodexModels = async () => {
+    if (!window.desktopApi?.listCodexModels) {
+      setCodexModelsState('error')
+      setCodexModelsError('AI 设置已更新，请完全退出并重新打开韭菜盒子后再读取模型。')
+      return
+    }
+    setCodexModelsState('loading')
+    setCodexModelsError('')
+    try {
+      const result = await window.desktopApi.listCodexModels(draft.codexPath)
+      if (!result.ok) {
+        setCodexModelsState('error')
+        setCodexModelsError(result.error || '未能读取 Codex 模型')
+        return
+      }
+      setCodexModels(result.models)
+      setCodexModelsState('ready')
+      setDraft((current) => {
+        const selected = normalizeCodexCliModel(current.codexModel || current.model)
+        const nextModel = result.models.some((model) => model.id === selected)
+          ? selected
+          : result.models.find((model) => model.isDefault)?.id || result.models[0]?.id
+        return nextModel && nextModel !== current.codexModel ? { ...current, codexModel: nextModel } : current
+      })
+    } catch (reason) {
+      setCodexModelsState('error')
+      setCodexModelsError(reason instanceof Error ? reason.message : String(reason))
+    }
+  }
+  useEffect(() => {
+    if (tab === 'ai' && draft.provider === 'codex-local' && codexModelsState === 'idle') void refreshCodexModels()
+  }, [tab, draft.provider, codexModelsState])
   const save = async () => {
     setMessage('')
     const normalized = { ...draft, timeoutSeconds: normalizeAiTimeoutSeconds(draft.timeoutSeconds) }
@@ -185,11 +228,39 @@ export function SettingsView(props: SettingsViewProps) {
         {tab === 'profile' && <ProfileSettingsPanel profile={props.userProfile} onSave={props.onUserProfile} />}
         {tab === 'memory' && <MemorySettingsPanel />}
         {tab === 'ai' && <div className="setting-section">
-          <div className="setting-title"><Bot size={16} /><div><strong>AI 连接方式</strong><span>大多数人使用默认设置即可。只有熟悉 AI 配置时才需要修改。</span></div></div>
-          <div className="provider-options">{[{ id: 'codex-local', title: '使用本机 AI', desc: '使用这台电脑上已经登录的 Codex' }, { id: 'openai-compatible', title: '连接其他 AI 服务', desc: '适合已经有 API 地址和密钥的用户' }].map((provider) => <button key={provider.id} className={draft.provider === provider.id ? 'provider-card selected' : 'provider-card'} onClick={() => setDraft({ ...draft, provider: provider.id as AiConfig['provider'] })} type="button"><span className="radio-dot" /><div><strong>{provider.title}</strong><small>{provider.desc}</small></div></button>)}</div>
+          <div className="setting-title"><Bot size={16} /><div><strong>模型提供方</strong><span>选择 AI 从哪里运行。后续可以继续增加其他本地工具。</span></div></div>
+          <div className="provider-options">{providerOptions.map((provider) => <button key={provider.id} className={draft.provider === provider.id ? 'provider-card selected' : 'provider-card'} onClick={() => { setDraft((current) => ({ ...current, provider: provider.id })); if (provider.id === 'codex-local') setCodexModelsState('idle') }} type="button"><span className="radio-dot" /><div><strong>{provider.title}</strong><small>{provider.desc}</small></div></button>)}</div>
           {draft.provider === 'codex-local'
-            ? <div className="form-grid"><label className="full"><span>Codex 程序位置（一般不用填）</span><input placeholder="留空即可自动查找" value={draft.codexPath || ''} onChange={(event) => setDraft({ ...draft, codexPath: event.target.value || undefined })} /></label></div>
-            : <div className="form-grid"><label><span>服务地址（Base URL）</span><input value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} /></label><label><span>模型名称</span><input value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} /></label><label className="full"><span>访问密钥（API Key）</span><div className="input-with-icon"><KeyRound size={14} /><input type="password" value={draft.apiKey || ''} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} /></div></label></div>}
+            ? <div className="codex-provider-settings">
+                <div className={`codex-model-status ${codexModelsState}`}>
+                  <span className="status-dot" />
+                  <div>
+                    <strong>{codexModelsState === 'loading' ? '正在读取 Codex 模型…' : codexModelsState === 'ready' ? `本地 Codex 已连接 · ${codexModels.length} 个模型可用` : codexModelsState === 'error' ? '本地 Codex 暂不可用' : '准备读取本地 Codex'}</strong>
+                    <small>{codexModelsState === 'error' ? codexModelsError : '通过本地 Codex CLI 的 model/list 实时读取，不会在应用中写死。'}</small>
+                  </div>
+                  <button className="secondary-button" disabled={codexModelsState === 'loading'} onClick={() => void refreshCodexModels()} type="button"><RefreshCw size={13} />重新读取</button>
+                </div>
+                <div className="form-grid codex-model-grid">
+                  <label className="full">
+                    <span>AI 使用模型</span>
+                    <select disabled={codexModelsState === 'loading' || codexModels.length === 0} value={draft.codexModel || draft.model} onChange={(event) => setDraft({ ...draft, codexModel: event.target.value })}>
+                      {codexModels.length === 0 && <option value={draft.codexModel || draft.model}>{codexModelsState === 'loading' ? '正在读取…' : draft.codexModel || draft.model || '暂无可用模型'}</option>}
+                      {codexModels.map((model) => <option key={model.id} value={model.id}>{model.displayName}{model.isDefault ? '（Codex 默认）' : ''}</option>)}
+                    </select>
+                    <small className="field-help">{(() => {
+                      const model = codexModels.find((item) => item.id === (draft.codexModel || draft.model))
+                      if (!model) return '保存后，聊天、定时任务和其他 AI 分析都会使用这个模型。'
+                      const effort = model.defaultReasoningEffort ? `默认思考强度：${model.defaultReasoningEffort}` : ''
+                      return [model.description, effort].filter(Boolean).join(' · ') || '保存后，所有 AI 分析都会使用这个模型。'
+                    })()}</small>
+                  </label>
+                  <details className="codex-advanced full">
+                    <summary>高级设置</summary>
+                    <label><span>Codex 程序位置（一般不用填）</span><input placeholder="留空即可自动查找" value={draft.codexPath || ''} onChange={(event) => { setDraft({ ...draft, codexPath: event.target.value || undefined }); setCodexModelsState('idle') }} /></label>
+                  </details>
+                </div>
+              </div>
+            : <div className="form-grid"><label><span>API 地址</span><input placeholder="https://api.openai.com/v1" value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} /></label><label><span>模型 ID</span><input placeholder="例如 gpt-5.6" value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} /></label><label className="full"><span>访问密钥（API Key）</span><div className="input-with-icon"><KeyRound size={14} /><input autoComplete="off" placeholder="仅加密保存在这台电脑" type="password" value={draft.apiKey || ''} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} /></div></label></div>}
           <div className="form-grid ai-timeout-settings">
             <label>
               <span>模型响应超时（秒）</span>

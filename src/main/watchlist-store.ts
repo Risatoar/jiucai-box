@@ -9,6 +9,16 @@ interface StoredWatchlist {
   instruments?: Array<Record<string, unknown>>
 }
 
+type AgentWatchCandidate = Instrument & {
+  score?: number
+  reasons?: unknown
+  signal?: string
+  strategyLane?: string
+  strategyLabel?: string
+  suitableFor?: string
+  nextAction?: string
+}
+
 export const addWatchItem = async (instrument: Instrument): Promise<void> => {
   const home = process.env.TRADE_MASTER_HOME || join(homedir(), '.trade-master')
   const target = join(home, 'watchlist.json')
@@ -45,7 +55,7 @@ export const removeWatchItem = async (code: string): Promise<void> => updateWatc
     : item)
 })
 
-export const addAgentWatchItems = async (items: Array<Instrument & { score?: number; reasons?: unknown; signal?: string }>): Promise<number> => {
+export const addAgentWatchItems = async (items: AgentWatchCandidate[]): Promise<number> => {
   let added = 0
   await updateWatchlist((stored) => {
     const next = [...stored]
@@ -66,7 +76,7 @@ export const addAgentWatchItems = async (items: Array<Instrument & { score?: num
   return added
 }
 
-export const loadActiveAgentWatchItems = async (): Promise<Array<Instrument & { score?: number; reasons?: unknown; signal?: string }>> => {
+export const loadActiveAgentWatchItems = async (): Promise<AgentWatchCandidate[]> => {
   const target = join(process.env.TRADE_MASTER_HOME || join(homedir(), '.trade-master'), 'watchlist.json')
   try {
     const stored = JSON.parse(await readFile(target, 'utf8')) as StoredWatchlist
@@ -77,16 +87,20 @@ export const loadActiveAgentWatchItems = async (): Promise<Array<Instrument & { 
   }
 }
 
-const agentItems = (items: Array<Record<string, unknown>>): Array<Instrument & { score?: number; reasons?: unknown; signal?: string }> => items.flatMap((item) => {
+const agentItems = (items: Array<Record<string, unknown>>): AgentWatchCandidate[] => items.flatMap((item) => {
       if (item.source !== 'agent' || !/^\d{6}$/.test(String(item.code))) return []
       if (!['stock', 'etf', 'cbond'].includes(String(item.type)) || !['SH', 'SZ', 'BJ'].includes(String(item.exchange))) return []
       return [{
         code: String(item.code), name: String(item.name || item.code), type: item.type as Instrument['type'], exchange: item.exchange as Instrument['exchange'],
-        score: Number(item.score || 0), reasons: item.reasons, signal: String(item.signal || '观察')
+        score: Number(item.score || 0), reasons: item.reasons, signal: String(item.signal || '观察'),
+        strategyLane: String(item.strategyLane || item.strategy_lane || '') || undefined,
+        strategyLabel: String(item.strategyLabel || item.strategy_lane_label || '') || undefined,
+        suitableFor: String(item.suitableFor || item.suitable_for || '') || undefined,
+        nextAction: String(item.nextAction || item.next_action || '') || undefined
       }]
     })
 
-export const loadAgentWatchItemsForReview = async (): Promise<Array<Instrument & { score?: number; reasons?: unknown; signal?: string }>> => {
+export const loadAgentWatchItemsForReview = async (): Promise<AgentWatchCandidate[]> => {
   const target = join(process.env.TRADE_MASTER_HOME || join(homedir(), '.trade-master'), 'watchlist.json')
   try {
     const stored = JSON.parse(await readFile(target, 'utf8')) as StoredWatchlist
@@ -102,10 +116,20 @@ export const loadAgentWatchItemsForReview = async (): Promise<Array<Instrument &
   }
 }
 
-export const syncAgentWatchItems = async (items: Array<Instrument & { score?: number; reasons?: unknown; signal?: string }>) => {
-  let added = 0; let updated = 0; let removed = 0
+export const syncAgentWatchItems = async (items: AgentWatchCandidate[]) => {
+  let added = 0; let updated = 0; let removed = 0; let active = 0; let skippedReason: string | undefined
   const incoming = new Set(items.map((item) => item.code))
   await updateWatchlist((stored) => {
+    const blocked = items.slice(0, 10).filter((item) => {
+      const existing = stored.find((candidate) => candidate.code === item.code)
+      return existing?.status === 'removed' && existing.removed_by === 'user'
+        || existing?.source === 'user' && existing.status === 'active'
+    })
+    if (blocked.length) {
+      active = stored.filter((item) => item.source === 'agent' && item.status === 'active').length
+      skippedReason = `${blocked.length} 个候选与用户收藏或手动删除记录冲突，已保留原关注列表`
+      return stored
+    }
     const next = stored.map((item) => {
       if (item.source !== 'agent' || item.status !== 'active' || incoming.has(String(item.code))) return item
       removed += 1
@@ -119,20 +143,28 @@ export const syncAgentWatchItems = async (items: Array<Instrument & { score?: nu
       if (next[index].source === 'user' && next[index].status === 'active') continue
       next[index] = { ...next[index], ...candidate }; updated += 1
     }
+    active = next.filter((item) => item.source === 'agent' && item.status === 'active').length
     return next
   })
-  return { added, updated, removed, active: Math.min(items.length, 10) }
+  return { added, updated, removed, active, skipped: Boolean(skippedReason), reason: skippedReason }
 }
 
-export const loadRuntimeCandidates = async (): Promise<Array<Instrument & { score?: number; reasons?: unknown; signal?: string }>> => {
+export const loadRuntimeCandidates = async (): Promise<AgentWatchCandidate[]> => {
   const target = join(process.env.TRADE_MASTER_HOME || join(homedir(), '.trade-master'), 'runtime/candidate-pool.json')
   try {
     const raw = JSON.parse(await readFile(target, 'utf8')) as { candidates?: Array<Record<string, unknown>> | Record<string, { main?: Array<Record<string, unknown>>; reserve?: Array<Record<string, unknown>> }> }
-    if (Array.isArray(raw.candidates)) return raw.candidates.slice(0, 20).flatMap((item) => {
+    if (Array.isArray(raw.candidates)) return raw.candidates.slice(0, 45).flatMap((item) => {
       const instrument = item.instrument as Record<string, unknown> | undefined
       if (!instrument || !/^\d{6}$/.test(String(instrument.code)) || !['stock', 'etf', 'cbond'].includes(String(item.type)) || !['SH', 'SZ', 'BJ'].includes(String(instrument.exchange))) return []
       const signal = item.status === 'buy_ready' ? '模型买入条件已满足，等待人工复核' : '模型关注候选'
-      return [{ code: String(instrument.code), name: String(instrument.name || instrument.code), type: item.type as Instrument['type'], exchange: instrument.exchange as Instrument['exchange'], score: Number(item.score || 0), reasons: item.reasons, signal }]
+      return [{
+        code: String(instrument.code), name: String(instrument.name || instrument.code), type: item.type as Instrument['type'], exchange: instrument.exchange as Instrument['exchange'],
+        score: Number(item.score || 0), reasons: item.reasons, signal,
+        strategyLane: String(item.strategy_lane || '') || undefined,
+        strategyLabel: String(item.strategy_lane_label || '') || undefined,
+        suitableFor: String(item.suitable_for || '') || undefined,
+        nextAction: String(item.next_action || '') || undefined
+      }]
     })
     return Object.values(raw.candidates || {}).flatMap((group) => [...(group.main || []), ...(group.reserve || [])]).flatMap((item) => {
       if (!/^\d{6}$/.test(String(item.code)) || !['stock', 'etf', 'cbond'].includes(String(item.type)) || !['SH', 'SZ', 'BJ'].includes(String(item.exchange))) return []

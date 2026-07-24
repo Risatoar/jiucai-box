@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { ChatMessage, ChatSession, ChatSessionSummary } from '../shared/types'
 import { recordAccountStateConfirmation } from './account-state-store'
+import { persistSessionSignals } from './signal-ledger-store'
 
 const sessionsDirectory = () => join(process.env.TRADE_MASTER_HOME || join(homedir(), '.trade-master'), 'conversations')
 const sessionChangedListeners = new Set<(session: ChatSessionSummary) => void>()
@@ -85,6 +86,7 @@ export const saveChatSession = async (input: ChatSession): Promise<ChatSession> 
   const saved = await writeChatSession(input, true)
   const newUserMessages = saved.messages.filter((message) => message.role === 'user' && !existingIds.has(message.id))
   for (const message of newUserMessages) await recordAccountStateConfirmation(message).catch(() => false)
+  await persistSessionSignals(saved).catch(() => 0)
   return saved
 }
 

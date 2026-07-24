@@ -109,4 +109,34 @@ describe('message presentation', () => {
     expect(result.groups[0].instruments).toHaveLength(1)
     expect(result.groups[0].instruments[0]).toMatchObject({ instrument: { code: '300438', name: '鹏辉能源' } })
   })
+
+  it('分隔线不会生成空结论卡或重复的公共信息卡', () => {
+    const result = buildMessagePresentation(`**结论：盘前扫描发现一条需关注的变化，老婆账户维持持有观察。**
+
+---
+
+## 老婆 → 老婆的账户
+
+### 300438 鹏辉能源
+
+- **持仓事实**: 300股，成本107.906元，可用300股
+- **策略**: 防守持有
+
+## 公共市场信息
+
+- **场外情绪**: 不能单独形成交易建议
+- **纪律状态**: NORMAL
+
+---`)
+
+    expect(result.lead).toBe('盘前扫描发现一条需关注的变化，老婆账户维持持有观察。')
+    expect(result.sections).toHaveLength(1)
+    expect(result.sections[0]).toMatchObject({
+      title: '公共市场信息',
+      paragraphs: [],
+      items: ['**场外情绪**: 不能单独形成交易建议', '**纪律状态**: NORMAL']
+    })
+    expect(result.sections.some((section) => section.title === '结论')).toBe(false)
+    expect(result.sections.flatMap((section) => section.paragraphs)).not.toContain('---')
+  })
 })

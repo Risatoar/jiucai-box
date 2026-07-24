@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HouseholdSnapshot, StockStrategyCardData } from '../../../shared/types'
-import { handlingLabel, priceFromSignal, resolveSignalAccountId, signalTradeSide } from './signal-handling'
+import { handlingLabel, priceFromSignal, resolveSignalAccountId, signalLabel, signalTradeSide } from './signal-handling'
 
 const household: HouseholdSnapshot = {
   members: [
@@ -24,6 +24,9 @@ describe('signal handling helpers', () => {
 
   it('derives direction, prices and persisted outcome labels', () => {
     expect(signalTradeSide(card)).toBe('sell')
+    expect(signalLabel(card)).toBe('推荐卖出')
+    expect(signalTradeSide({ ...card, signal: 'immediate_buy' })).toBe('buy')
+    expect(signalLabel({ ...card, signal: 'immediate_buy', executionValidUntil: new Date(Date.now() - 1_000).toISOString() })).toContain('当前点位已过期')
     expect(priceFromSignal('¥32.96 附近')).toBe('32.96')
     expect(handlingLabel('executed', 'sell')).toBe('已卖出登记')
   })

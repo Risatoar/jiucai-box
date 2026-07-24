@@ -6,7 +6,7 @@ const INTRADAY_CONTRACT_MARKER = '系统新增盘中双通道约束：';
 function taskPrompt(mode) {
     const base = `使用 $trade-master，mode=${mode}，home=~/.trade-master。先读取 evolution/active.json，再严格按 Skill 契约运行；不得操作券商。`;
     if (mode === 'candidate_refresh') {
-        return `${base} 使用 candidate_model_v2。任务必须先扫描全部A股、ETF和可转债，并读取 profile.json、goals.json 与 runtime/candidate-pool.json。模型必须把设置中的盈利目标、目标期限、最大资金暴露、实际交易成本和最大回撤换算为标的20交易日收益空间与风险门槛；盈利目标只能提高候选质量，禁止放宽回撤、仓位、追涨或交易频率约束。关注候选也允许为0：candidates 只包含0到5个同时通过目标覆盖率、模型绝对分数、成本效率、日线趋势与风险门槛的标的；buy_ready_candidates 才是其中进一步满足完整5/15分钟闭合结构、独立量能和非追涨条件的人工复核候选。先说明本轮设置对应的目标收益空间，再列“本轮通过绝对门槛的关注候选”和“当前买入条件已满足”；任一列表为空时如实说明，不得为了凑5只降低标准。所有候选必须按单个标的聚合，每个证券使用“## 6位代码 名称”，并在该区块内连续写当前价和数据时间、模型排序依据、目标覆盖率、触发条件、失效条件、主要风险、下一检查点；禁止先列全部标的再按字段拆卡。model.validation_status 不是 validated 时，禁止使用“已验证高置信、高胜率”或给出胜率数字。不得输出本人或家庭账户的持仓、资金、成本、可用数量或减仓提醒；不得承诺盈利、不得自动下单。`;
+        return `${base} 使用 candidate_model_v2。任务必须先扫描全部A股、ETF和可转债，并读取 profile.json、goals.json 与 runtime/candidate-pool.json。成功结果固定10只且代码不重复：低波动稳健、3日内短线、中长线趋势、热门主线龙头、强势打板观察各2只，分别对应稳健选手、短线选手、中长线选手、龙头战法选手和打板选手。模型必须把设置中的盈利目标、目标期限、最大资金暴露、实际交易成本和最大回撤换算为标的20交易日收益空间与风险门槛；画像影响篮子内排序和执行门槛，但不能删掉其他策略篮子。任一篮子不足2只时必须报告候选不足并保留原关注列表，禁止降低门槛凑数。buy_ready_candidates 只包含进一步满足完整5/15分钟闭合结构、独立量能和非追涨条件的人工复核候选；强势打板观察不等于追涨或自动买入。先按五个策略篮子输出，再列“当前买入条件已满足”；所有候选必须按单个标的聚合，每个证券使用“## 6位代码 名称”，并连续写策略篮子、适合人群、当前价和数据时间、排序依据、触发条件、失效条件、主要风险、下一检查点；禁止先列全部标的再按字段拆卡。model.validation_status 不是 validated 时，禁止使用“已验证高置信、高胜率”或给出胜率数字。不得输出本人或家庭账户的持仓、资金、成本、可用数量或减仓提醒；不得承诺盈利、不得自动下单。`;
     }
     if (mode === 'intraday') {
         return `${base} 盘中固定分两条通道。第一条“持仓策略”覆盖本人及已开启监控的家庭账户持仓，分别给出买入、持有、减仓或卖出策略；只有闭合5/15分钟K线和独立量价证据形成强烈买入或卖出信号时才提醒。涉及两个或更多账户时，每个账户必须使用独立二级标题“## 成员名 → 账户名”，并在标题下完整列出该账户的持仓、总数量、可用数量、策略、风险和下一检查点；不得跨账户合并成本、数量、现金或动作，同一证券存在于多个账户时也必须按账户分别生成策略卡。账户内按标的聚合，每个证券使用三级标题“### 6位代码 名称”，并把该标的的当前状态、策略、触发条件、失效条件、风险和下一检查点连续写在同一区块；非持仓候选直接使用二级证券标题，禁止按字段横跨多个标的拆卡。第二条“自选买点”覆盖非持仓关注列表中 source=user 的我的收藏和 source=agent 的AI发现，只检查高质量买点，不输出卖出策略；必须读取本次 watchlist monitor 证据，只在 new_buy_signals 新增或 invalidated_buy_signals 失效时提醒，重复 buy_ready 必须静默。主账户空仓时仍必须每轮完整扫描我的收藏和AI发现，优先寻找可以买入的标的，不能因为没有持仓就省略主账户。只要任一账户或任一自选标的有材料变化并生成回答，所有已启用监控的账户都必须输出；空仓账户固定写明现金状态、关注池扫描覆盖、新增或失效买点、阻断原因和下一检查点。自选新买点归入实际用于执行的主账户，策略卡写该 accountScope，并用 source=user/agent 区分来源。形成中的K线只能预览，不能触发动作。runtime/candidate-pool.json 与 candidate monitor 只用于补充AI候选模型状态，不能替代全量自选扫描。每个提醒写明代码名称、来源、当前价和数据时间、触发条件、失效条件、风险及下一检查点。账户、纪律、费用或现金安全垫不通过时，技术机会和执行阻断分开写；不得自动下单。两条通道都没有材料变化时只返回 NO_REPLY。`;
@@ -16,6 +16,15 @@ function taskPrompt(mode) {
     }
     if (mode === 'midday_review') {
         return `${base} 这是工作日12:00午盘复盘。基于截至上午收盘的全市场广度、指数或代表性ETF走势、成交活跃度、异动候选池、本人及家庭持仓、纪律和待确认交易事实，总结上午盘面并给出下午辅助决策。固定按“上午结论、市场走势与异动、内外围消息影响、持仓与候选、下午操作建议、触发条件/失效条件、风险与下一检查点”输出。消息面只能使用本次证据中可核验且注明时间的信息；证据不足必须明确写“消息面证据待补”，不得编造。下午建议须说明什么情况下继续等、什么情况下人工复核、什么情况下放弃，禁止自动下单或声称成交。本任务应正常生成午盘摘要；只有上午行情证据整体不可用时才返回 NO_REPLY。`;
+    }
+    if (mode === 'formal_close' || mode === 'post_market') {
+        return `${base} 必须读取宿主提供的历史买卖点准确性复盘和最新20至30只标的近1个月滚动回测，按后续1/3/7/15个交易日收益核对历史信号；买入后上涨、卖出后下跌均记为方向正确。当天复盘要明确列出新回填结果、goodcase、badcase、待继续观察样本，以及逃顶、避免卖飞、做T、抄底、下跌本金保护、上涨利润持有和高抛低吸七类场景的弱项。不得只复盘当天盈亏，也不得把单个案例或训练样本80%直接升级成活动策略；发现badcase时只形成待验证策略候选。`;
+    }
+    if (mode === 'rolling_backtest') {
+        return `${base} 读取宿主完成的公开固定25只标的近1个月滚动回测；不得使用持仓、自选、成本、账户或候选池替换或补充回测池。必须报告样本数量、历史与样本外切分、总准确率、95%置信下界、七类场景覆盖和低于80%的弱场景；同时区分原始技术信号、用户可执行信号和被账户/纪律/费用闸门阻断的信号。禁止用未来数据生成买卖点，禁止为了达到80%调低风险门槛，禁止自动修改活动策略。若数据不足或置信下界未达到80%，结论必须是继续收集和优化。`;
+    }
+    if (mode === 'refine') {
+        return `${base} 必须把历史信号账本的1/3/7/15交易日方向收益、goodcase、badcase和最新滚动回测作为策略优化证据，优先分析逃顶、卖飞、漏接回、做T失败、过早抄底、下跌本金保护和上涨趋势中过早卖出。只生成或补强L2策略候选；样本外准确率与95%置信下界均达到80%、七类场景覆盖、至少5个影子交易日、利润因子和回撤门槛全部通过后，才允许进入策略升级。证据不足时明确继续收集，禁止直接改写活动策略。`;
     }
     if (mode === 'automation_health') {
         return `${base} 只读核对自动化状态、目标任务是否存在、最近成功运行时间和交易窗口漏跑；有故障必须通知，没有变化返回 NO_REPLY。不得借健康修复放宽任何交易闸门。`;
@@ -71,8 +80,8 @@ export function syncDefaultAutomations() {
         const title = String(task.title ?? '').trim();
         const description = String(task.description ?? '').trim();
         const candidatePromptNeedsUpgrade = task.id === 'candidate_refresh'
-            && (!String(task.prompt ?? '').includes('关注候选也允许为0')
-                || !String(task.prompt ?? '').includes('目标覆盖率')
+            && (!String(task.prompt ?? '').includes('五个策略篮子')
+                || !String(task.prompt ?? '').includes('固定10只')
                 || !String(task.prompt ?? '').includes('按单个标的聚合'));
         const intradayPrompt = String(task.prompt ?? '');
         const intradayContractCount = intradayPrompt.split(INTRADAY_CONTRACT_MARKER).length - 1;
@@ -84,19 +93,49 @@ export function syncDefaultAutomations() {
                 || intradayContractCount > 1);
         const vocPromptNeedsUpgrade = task.id === 'voc_monitor'
             && !String(task.prompt ?? '').includes('不需要交叉验证具体证券');
+        const rollingPromptNeedsUpgrade = task.id === 'rolling_backtest'
+            && !String(task.prompt ?? '').includes('公开固定25只');
+        const signalReviewPromptNeedsUpgrade = ['formal_close', 'post_market', 'refine'].includes(task.id)
+            && (!String(task.prompt ?? '').includes('1/3/7/15')
+                || (['post_market', 'refine'].includes(task.id) && !String(task.prompt ?? '').includes('七类场景')));
+        const legacySignalReviewDescriptions = {
+            formal_close: ['收盘后核对行情和持仓记录'],
+            post_market: ['核对今天的买卖，并总结经验', '复盘历史买卖点，筛选有效与失误案例并反思卖飞、漏接回等问题'],
+            refine: [
+                '验证新的交易规则，保留修改前版本',
+                '基于历史信号案例生成待验证策略候选，不直接改写活动规则',
+                '仅当样本外准确率达到80%且七类场景覆盖、影子验证和回撤门槛通过后升级策略',
+            ],
+        };
+        const signalReviewDescriptionNeedsUpgrade = (legacySignalReviewDescriptions[task.id] ?? []).includes(description);
+        const legacySchedules = {
+            post_market: '15 15 * * 1-5',
+            refine: '0 16 * * 1-5',
+        };
+        const schedule = task.schedule?.kind === 'cron' && task.schedule.expression === legacySchedules[task.id]
+            ? template.schedule
+            : task.schedule ?? template.schedule;
         return {
             ...task,
-            title: !title || title === task.id || title === task.mode ? template.title : task.title,
+            schedule,
+            title: !title || title === task.id || title === task.mode
+                || (task.id === 'refine' && title === '优化交易规则') ? template.title : task.title,
             description: !description || description === '按设定时间自动检查并提醒'
-                || (task.id === 'candidate_refresh' && ['开盘期间持续扫描并动态更新可关注候选', '发掘最多5个低风险、高置信度买入观察机会，并更新AI推荐关注列表', '全市场筛选5个模型关注候选，并标出0至5个买入就绪标的', '全市场筛选0至5个合格关注候选，并标出买入就绪标的'].includes(description))
+                || (task.id === 'candidate_refresh' && ['开盘期间持续扫描并动态更新可关注候选', '发掘最多5个低风险、高置信度买入观察机会，并更新AI推荐关注列表', '全市场筛选5个模型关注候选，并标出0至5个买入就绪标的', '全市场筛选0至5个合格关注候选，并标出买入就绪标的', '结合盈利目标全市场筛选0至5个合格候选，并标出买入就绪标的'].includes(description))
                 || (task.id === 'intraday' && description === '持仓、关注品种或候选标的有重要变化时提醒你')
-                || (task.id === 'pre_open_refresh' && description === '开盘前更新账户、行情和关注品种') ? template.description : task.description,
+                || (task.id === 'pre_open_refresh' && description === '开盘前更新账户、行情和关注品种')
+                || (task.id === 'rolling_backtest' && description === '持续回测20至30只标的近1个月买卖点，覆盖七类交易场景并验证80%样本外置信门槛')
+                || signalReviewDescriptionNeedsUpgrade ? template.description : task.description,
             prompt: candidatePromptNeedsUpgrade
                 ? taskPrompt(task.mode)
                 : intradayPromptNeedsUpgrade
                     ? mergeIntradayPrompt(task.prompt)
                     : vocPromptNeedsUpgrade
                         ? taskPrompt(task.mode)
+                        : rollingPromptNeedsUpgrade
+                            ? taskPrompt(task.mode)
+                        : signalReviewPromptNeedsUpgrade
+                            ? taskPrompt(task.mode)
                         : task.prompt,
             system_default: true,
         };

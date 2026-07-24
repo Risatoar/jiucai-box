@@ -20,6 +20,9 @@
   "refinement": {
     "minimum_history_samples": 30,
     "minimum_out_of_sample_samples": 10,
+    "minimum_out_of_sample_accuracy": 80,
+    "minimum_confidence_lower_bound": 80,
+    "minimum_scenario_coverage": 7,
     "minimum_shadow_days": 5,
     "maximum_drawdown_delta": 0.005,
     "minimum_profit_factor": 1.05,

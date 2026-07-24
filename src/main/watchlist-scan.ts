@@ -22,6 +22,9 @@ interface MonitoredCandidate {
   conclusion?: string
   data_as_of?: string
   error?: string
+  strategy_lane?: string
+  strategy_lane_label?: string
+  suitable_for?: string
 }
 
 interface CandidateMonitor { candidates?: MonitoredCandidate[] }
@@ -46,9 +49,20 @@ const attachTechnicalEvidence = (candidates: OpportunityCandidate[], monitor: Ca
   const byCode = new Map((monitor.candidates || []).map((item) => [item.code, item]))
   return candidates.map((candidate) => {
     const evidence = byCode.get(candidate.code)
-    return evidence ? { ...candidate, technicalEvidence: evidence } : candidate
+    return evidence ? {
+      ...candidate,
+      technicalEvidence: evidence,
+      strategyLane: evidence.strategy_lane,
+      strategyLabel: evidence.strategy_lane_label,
+      suitableFor: evidence.suitable_for
+    } : candidate
   })
 }
+
+export const filterVerifiedOpportunityCandidates = (candidates: OpportunityCandidate[]): OpportunityCandidate[] => candidates.filter((item) => {
+  const evidence = item.technicalEvidence as MonitoredCandidate | undefined
+  return Boolean(evidence?.technical_evidence && ['watching', 'buy_ready'].includes(String(evidence.status)))
+})
 
 const countScanned = (refresh: CandidateRefresh) => (refresh.market_breadth || refresh.attempted_market_breadth || [])
   .reduce((sum, item) => sum + Number(item.total || 0), 0)
@@ -58,7 +72,7 @@ export const scanWatchlistOpportunities = async (liveItems: WatchItem[] = []): P
   try {
     const previous = await loadAgentWatchItemsForReview()
     const refreshed = JSON.parse(await runTradeMaster('candidate', [
-      'refresh', '--as-of', new Date().toISOString(), '--limit', '20', '--screening-only', '--no-sync'
+      'refresh', '--as-of', new Date().toISOString(), '--limit', '45', '--screening-only', '--no-sync'
     ])) as CandidateRefresh
     if (refreshed.refresh_status !== 'success') {
       throw new Error(`全市场初筛没有完成${refreshed.source_errors?.length ? `：${refreshed.source_errors.join('；')}` : ''}，已保留原关注列表`)
@@ -69,20 +83,19 @@ export const scanWatchlistOpportunities = async (liveItems: WatchItem[] = []): P
       ? liveItems.filter((item) => previous.some((old) => old.code === item.code) && /^\d{6}$/.test(item.code))
       : []
     const reviewPool = buildOpportunityReviewPool(screened, previous, safeLiveItems)
-    if (reviewPool.length < 5) throw new Error(`全市场初筛只有 ${reviewPool.length} 个候选，未达到深度分析最低 5 个，已保留原关注列表`)
+    if (!reviewPool.length) throw new Error('全市场初筛没有留下可复核候选，已保留原关注列表')
 
     const monitored = JSON.parse(await runTradeMaster('candidate', ['monitor', '--limit', String(reviewPool.length)])) as CandidateMonitor
     const enrichedPool = attachTechnicalEvidence(reviewPool, monitored)
-    const enriched = enrichedPool.filter((item) => {
-      const evidence = item.technicalEvidence as MonitoredCandidate | undefined
-      return evidence?.technical_evidence && evidence.status !== 'market_unavailable'
-    }).length
-    if (enriched < 5) throw new Error(`只有 ${enriched}/${reviewPool.length} 个候选完成 K 线和量能验证，未达到 AI 分析最低要求，已保留原关注列表`)
+    const verifiedPool = filterVerifiedOpportunityCandidates(enrichedPool)
+    const enriched = verifiedPool.length
+    if (enriched !== 10) throw new Error(`只有 ${enriched}/10 个候选完成五策略篮子验证（共复核 ${reviewPool.length} 个），已保留原关注列表`)
 
     const aiStartedAt = Date.now()
-    const analyzed = await analyzeWatchlistOpportunities(await loadAiConfig(), enrichedPool, previous.map((item) => item.code))
+    const analyzed = await analyzeWatchlistOpportunities(await loadAiConfig(), verifiedPool, previous.map((item) => item.code))
     const aiDurationMs = Date.now() - aiStartedAt
     const sync = await syncAgentWatchItems(analyzed)
+    if (sync.skipped) throw new Error(sync.reason || '候选列表写入失败，已保留原关注列表')
     return {
       ok: true,
       ...sync,

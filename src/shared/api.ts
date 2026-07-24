@@ -1,4 +1,4 @@
-import type { AiConfig, AiMessageInput, AppUpdateStatus, AttachmentInput, AutomationRun, ChatAttachment, ChatRunChangedEvent, ChatRunSnapshot, ChatSession, ChatSessionSummary, DesktopIntegrationStatus, FeishuChatSearchResult, FeishuConnectionResult, FeishuConversationStatus, HouseholdAccount, HouseholdAccountInput, HouseholdMember, HouseholdMemberInput, Instrument, MarketAiInsight, MarketInsightRequest, MemoryInput, MemoryItem, MemorySettings, MemorySnapshot, SetupProgress, SetupResult, StrategyMutationResult, TradeMasterSnapshot, TradeRecordInput, UserProfile, VocSource, WatchItem } from './types'
+import type { AiConfig, AiMessageInput, AppUpdateStatus, AttachmentInput, AutomationRun, ChatAttachment, ChatRunChangedEvent, ChatRunSnapshot, ChatSession, ChatSessionSummary, CodexModelOption, DailySignalReview, DesktopIntegrationStatus, FeishuChatSearchResult, FeishuConnectionResult, FeishuConversationStatus, HouseholdAccount, HouseholdAccountInput, HouseholdMember, HouseholdMemberInput, Instrument, MarketAiInsight, MarketInsightRequest, MemoryInput, MemoryItem, MemorySettings, MemorySnapshot, SetupProgress, SetupResult, SignalHistorySnapshot, StrategyMutationResult, TradeMasterSnapshot, TradeRecordInput, UserProfile, VocSource, WatchItem, ReviewReport, ReviewRequest, ReviewRatingInput } from './types'
 import type { AutomationTaskInput } from './automation-schedule'
 import type { PositionStrategyAnalysis, PositionStrategyRequest } from './position-strategy'
 
@@ -12,12 +12,16 @@ export interface DesktopApi {
   onChatRunChanged: (listener: (event: ChatRunChangedEvent) => void) => () => void
   extractMemories: (config: AiConfig, sessionId: string, messages: AiMessageInput[]) => Promise<{ ok: boolean; added?: number; error?: string }>
   analyzeMarketInsight: (request: MarketInsightRequest) => Promise<{ ok: boolean; insight?: MarketAiInsight; error?: string }>
+  getReviewReport: (request: ReviewRequest) => Promise<{ ok: boolean; report?: ReviewReport; error?: string }>
+  refreshReviewReport: (request: ReviewRequest) => Promise<{ ok: boolean; report?: ReviewReport; error?: string }>
+  saveReviewRating: (period: ReviewReport["period"], tradingDate: string, input: ReviewRatingInput) => Promise<{ ok: boolean; report?: ReviewReport; error?: string }>
   analyzePositionStrategy: (request: PositionStrategyRequest) => Promise<{ ok: boolean; analysis?: PositionStrategyAnalysis; cached?: boolean; stale?: boolean; warning?: string; error?: string }>
   pickAttachments: (sessionId: string) => Promise<{ ok: boolean; attachments?: ChatAttachment[]; error?: string }>
   saveClipboardAttachment: (sessionId: string, input: AttachmentInput) => Promise<{ ok: boolean; attachment?: ChatAttachment; error?: string }>
   discardAttachment: (storageKey: string) => Promise<boolean>
   loadAiConfig: () => Promise<AiConfig>
   saveAiConfig: (config: AiConfig) => Promise<AiConfig>
+  listCodexModels: (codexPath?: string) => Promise<{ ok: boolean; models: CodexModelOption[]; codexPath?: string; error?: string }>
   listChatSessions: (archived?: boolean) => Promise<ChatSessionSummary[]>
   createChatSession: () => Promise<ChatSession>
   loadChatSession: (id: string) => Promise<ChatSession>
@@ -44,6 +48,8 @@ export interface DesktopApi {
   updateHouseholdMember: (id: string, patch: Partial<Pick<HouseholdMember, 'name' | 'relationship' | 'riskProfile' | 'monitoringEnabled'>>) => Promise<{ ok: boolean; member?: HouseholdMember; error?: string }>
   updateHouseholdAccount: (id: string, patch: Partial<Pick<HouseholdAccount, 'name' | 'broker' | 'totalAsset' | 'monitoringEnabled'>>) => Promise<{ ok: boolean; account?: HouseholdAccount; error?: string }>
   recordHouseholdTrade: (accountId: string, trade: TradeRecordInput) => Promise<{ ok: boolean; error?: string }>
+  loadSignalHistory: (code: string) => Promise<{ ok: boolean; history?: SignalHistorySnapshot; error?: string }>
+  reviewSignals: (tradingDate?: string) => Promise<{ ok: boolean; review?: DailySignalReview; error?: string }>
   setStrategyStatus: (id: string, action: 'pause' | 'enable' | 'promote') => Promise<StrategyMutationResult>
   rollbackStrategies: () => Promise<{ ok: boolean; error?: string }>
   installAutomations: () => Promise<{ ok: boolean; error?: string }>

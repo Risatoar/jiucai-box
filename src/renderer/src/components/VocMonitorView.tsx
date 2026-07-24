@@ -1,9 +1,10 @@
 import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronDown, Clipboard, Download, ExternalLink, History, LogIn, Radio, Save, Settings2, Upload, Waves } from 'lucide-react'
-import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { Fragment, useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import type { VocSnapshot, VocSource } from '../../../shared/types'
 import { isStockMarketVocEvent } from '../../../shared/voc-relevance'
 import { buildVocSourceTransferJson } from '../../../shared/voc-source-transfer'
 import { buildVocTrendDashboard, type VocActorTrend, type VocTagEvidence } from '../utils/voc-trends'
+import { VocSourceImportDialog } from './VocSourceImportDialog'
 
 interface VocMonitorViewProps {
   snapshot: VocSnapshot | null | undefined
@@ -32,9 +33,8 @@ export function VocMonitorView({ snapshot, onUpdateSource, onImportSources, onOp
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [transferMessage, setTransferMessage] = useState('')
   const [transferError, setTransferError] = useState(false)
-  const [importing, setImporting] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  const importInputRef = useRef<HTMLInputElement>(null)
   const [selectedEvidence, setSelectedEvidence] = useState<{ sourceId: string; label: string; category: VocTagEvidence['category']; items: VocTagEvidence[] } | null>(null)
   const [selectedDrilldown, setSelectedDrilldown] = useState<{ sourceId: string; scope: DrilldownScope } | null>(null)
   useEffect(() => { setDrafts(Object.fromEntries(sources.map((source) => [source.id, source.profileUrl || '']))) }, [snapshot?.loadedAt])
@@ -120,15 +120,12 @@ export function VocMonitorView({ snapshot, onUpdateSource, onImportSources, onOp
       window.setTimeout(() => setCopied(false), 1800)
     } catch { setTransferError(true); setTransferMessage('复制失败，请检查系统剪贴板权限') }
   }
-  const importJson = async (file: File | undefined) => {
-    if (!file || importing) return
-    setImporting(true); setTransferMessage('')
-    try {
-      const result = await onImportSources(await file.text())
-      setTransferError(!result.ok)
-      setTransferMessage(result.ok ? `已导入 ${result.imported || 0} 个账号${result.added ? `，其中新增 ${result.added} 个` : ''}` : result.error || '导入失败')
-    } catch (error) { setTransferError(true); setTransferMessage(`导入失败：${error instanceof Error ? error.message : String(error)}`) }
-    finally { setImporting(false); if (importInputRef.current) importInputRef.current.value = '' }
+  const importJson = async (raw: string) => {
+    setTransferMessage('')
+    const result = await onImportSources(raw)
+    setTransferError(!result.ok)
+    setTransferMessage(result.ok ? `已导入 ${result.imported || 0} 个账号${result.added ? `，其中新增 ${result.added} 个` : ''}` : result.error || '导入失败')
+    return result
   }
   return (
     <section className="content-view voc-view">
@@ -156,7 +153,7 @@ export function VocMonitorView({ snapshot, onUpdateSource, onImportSources, onOp
       </section>}
 
       {settingsOpen && <section className="voc-section voc-settings-panel">
-        <header><div><strong>重点监控账号</strong><span>使用独立 Chrome 登录态，只读取下列公开主页。</span></div><div className="voc-source-transfer-actions"><button className="secondary-button" onClick={() => void copyJson()} type="button">{copied ? <Check size={13} /> : <Clipboard size={13} />}{copied ? '已复制' : '复制 JSON'}</button><button className="secondary-button" onClick={exportJson} type="button"><Download size={13} />导出 JSON</button><button className="secondary-button" disabled={importing} onClick={() => importInputRef.current?.click()} type="button"><Upload size={13} />{importing ? '导入中…' : '导入 JSON'}</button><input accept="application/json,.json" aria-label="选择监控账号 JSON" hidden onChange={(event) => void importJson(event.target.files?.[0])} ref={importInputRef} type="file" /><button className="secondary-button" onClick={() => void openLogin()} type="button"><LogIn size={13} />登录采集浏览器</button></div></header>
+        <header><div><strong>重点监控账号</strong><span>使用独立 Chrome 登录态，只读取下列公开主页。</span></div><div className="voc-source-transfer-actions"><button className="secondary-button" onClick={() => void copyJson()} type="button">{copied ? <Check size={13} /> : <Clipboard size={13} />}{copied ? '已复制' : '复制 JSON'}</button><button className="secondary-button" onClick={exportJson} type="button"><Download size={13} />导出 JSON</button><button className="secondary-button" onClick={() => setImportOpen(true)} type="button"><Upload size={13} />导入 JSON</button><button className="secondary-button" onClick={() => void openLogin()} type="button"><LogIn size={13} />登录采集浏览器</button></div></header>
         {transferMessage && <p aria-live="polite" className={transferError ? 'voc-transfer-notice error' : 'voc-transfer-notice'}>{transferMessage}</p>}
         <div className="voc-source-list">{sources.map((source) => (
           <article key={source.id}>
@@ -206,6 +203,7 @@ export function VocMonitorView({ snapshot, onUpdateSource, onImportSources, onOp
           <details className="voc-report-details"><summary>查看完整分析与原文链接</summary><p className="voc-report-summary">{report.summary}</p></details>
         </article>)}</div> : <div className="voc-empty"><Waves size={22} /><strong>还没有可分析的场外更新</strong><span>账号主页和采集连接器就绪后，新增内容会在 2 分钟内进入分析。</span></div>}
       </section>
+      {importOpen && <VocSourceImportDialog onClose={() => setImportOpen(false)} onImport={importJson} />}
     </section>
   )
 }

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tradeMasterHome } from './storage.js';
 const DEFAULT_POLICY = {
@@ -7,6 +7,9 @@ const DEFAULT_POLICY = {
     max_entries: 5000,
     max_bytes: 512 * 1024 * 1024,
 };
+const INDEX_FLUSH_DELAY_MS = 180;
+const ACCESS_TOUCH_INTERVAL_MS = 5 * 60_000;
+const STALE_LOCK_MS = 30_000;
 function atomicWrite(path, value) {
     const temporary = `${path}.${process.pid}.tmp`;
     writeFileSync(temporary, value, 'utf8');
@@ -23,14 +26,19 @@ export class MarketCache {
     root;
     dataRoot;
     indexPath;
+    lockPath;
     policy;
+    index = null;
+    pendingEntries = new Map();
+    pendingDeletions = new Map();
+    flushTimer = null;
     constructor(policy, root = join(tradeMasterHome(), 'market-cache')) {
         this.root = root;
         this.dataRoot = join(root, 'data');
         this.indexPath = join(root, 'index.json');
+        this.lockPath = join(root, 'index.lock');
         this.policy = safePolicy(policy);
         mkdirSync(this.dataRoot, { recursive: true });
-        this.reconcile();
     }
     emptyIndex() {
         return { schema_version: 1, policy: this.policy, entries: {}, updated_at: new Date().toISOString() };
@@ -46,6 +54,11 @@ export class MarketCache {
             return this.emptyIndex();
         }
     }
+    ensureIndex() {
+        if (!this.index)
+            this.index = this.readIndex();
+        return this.index;
+    }
     writeIndex(index) {
         index.updated_at = new Date().toISOString();
         atomicWrite(this.indexPath, `${JSON.stringify(index, null, 2)}\n`);
@@ -53,38 +66,70 @@ export class MarketCache {
     id(key) {
         return createHash('sha256').update(key).digest('hex');
     }
+    removeDataFile(entry) {
+        const path = join(this.dataRoot, entry.file);
+        if (existsSync(path))
+            unlinkSync(path);
+    }
+    deleteEntry(id, entry) {
+        this.removeDataFile(entry);
+        delete this.ensureIndex().entries[id];
+        this.pendingEntries.delete(id);
+        this.pendingDeletions.set(id, entry.updated_at);
+        this.scheduleFlush();
+    }
+    recoverOrphan(key, id, path, maxAgeMs) {
+        if (!existsSync(path))
+            return null;
+        const stats = statSync(path);
+        if (Date.now() - stats.mtimeMs > maxAgeMs)
+            return null;
+        const timestamp = stats.mtime.toISOString();
+        const entry = {
+            key,
+            file: `${id}.json`,
+            created_at: timestamp,
+            updated_at: timestamp,
+            last_accessed_at: timestamp,
+            expires_at: new Date(stats.mtimeMs + this.policy.retention_days * 86_400_000).toISOString(),
+            size: stats.size,
+            source: 'recovered',
+        };
+        this.ensureIndex().entries[id] = entry;
+        this.pendingEntries.set(id, entry);
+        this.scheduleFlush();
+        return entry;
+    }
     get(key, maxAgeMs = Number.POSITIVE_INFINITY) {
-        const index = this.readIndex();
+        const index = this.ensureIndex();
         const id = this.id(key);
-        const entry = index.entries[id];
+        const defaultPath = join(this.dataRoot, `${id}.json`);
+        const entry = index.entries[id] ?? this.recoverOrphan(key, id, defaultPath, maxAgeMs);
         if (!entry)
             return null;
         const path = join(this.dataRoot, entry.file);
         const now = Date.now();
         const expired = now >= Date.parse(entry.expires_at) || now - Date.parse(entry.updated_at) > maxAgeMs;
         if (expired || !existsSync(path)) {
-            if (existsSync(path))
-                unlinkSync(path);
-            delete index.entries[id];
-            this.writeIndex(index);
+            this.deleteEntry(id, entry);
             return null;
         }
         try {
             const value = JSON.parse(readFileSync(path, 'utf8'));
-            entry.last_accessed_at = new Date().toISOString();
-            this.writeIndex(index);
+            if (now - Date.parse(entry.last_accessed_at) >= ACCESS_TOUCH_INTERVAL_MS) {
+                entry.last_accessed_at = new Date(now).toISOString();
+                this.pendingEntries.set(id, entry);
+                this.scheduleFlush();
+            }
             return value;
         }
         catch {
-            if (existsSync(path))
-                unlinkSync(path);
-            delete index.entries[id];
-            this.writeIndex(index);
+            this.deleteEntry(id, entry);
             return null;
         }
     }
     set(key, value, source) {
-        const index = this.readIndex();
+        const index = this.ensureIndex();
         const id = this.id(key);
         const file = `${id}.json`;
         const path = join(this.dataRoot, file);
@@ -102,8 +147,9 @@ export class MarketCache {
             size: Buffer.byteLength(serialized),
             source,
         };
-        this.pruneIndex(index);
-        this.writeIndex(index);
+        this.pendingDeletions.delete(id);
+        this.pendingEntries.set(id, index.entries[id]);
+        this.scheduleFlush();
     }
     async getOrLoad(key, loader, maxAgeMs, source) {
         const cached = this.get(key, maxAgeMs);
@@ -113,11 +159,86 @@ export class MarketCache {
         this.set(key, value, source);
         return value;
     }
+    acquireLock() {
+        try {
+            return openSync(this.lockPath, 'wx');
+        }
+        catch {
+            try {
+                if (Date.now() - statSync(this.lockPath).mtimeMs > STALE_LOCK_MS)
+                    unlinkSync(this.lockPath);
+            }
+            catch { /* another process released the lock */ }
+            try {
+                return openSync(this.lockPath, 'wx');
+            }
+            catch {
+                return null;
+            }
+        }
+    }
+    releaseLock(fd) {
+        try {
+            closeSync(fd);
+        }
+        finally {
+            try {
+                unlinkSync(this.lockPath);
+            }
+            catch { /* already released */ }
+        }
+    }
+    scheduleFlush() {
+        if (this.flushTimer)
+            return;
+        this.flushTimer = setTimeout(() => {
+            this.flushTimer = null;
+            let retry = false;
+            try {
+                retry = !this.flush();
+            }
+            catch { /* raw cache files remain readable and can be recovered later */ }
+            if (retry)
+                this.scheduleFlush();
+        }, INDEX_FLUSH_DELAY_MS);
+    }
+    flush() {
+        if (this.flushTimer) {
+            clearTimeout(this.flushTimer);
+            this.flushTimer = null;
+        }
+        if (!this.pendingEntries.size && !this.pendingDeletions.size)
+            return true;
+        const fd = this.acquireLock();
+        if (fd == null)
+            return false;
+        try {
+            const latest = this.readIndex();
+            for (const [id, expectedUpdatedAt] of this.pendingDeletions) {
+                const current = latest.entries[id];
+                if (current && Date.parse(current.updated_at) <= Date.parse(expectedUpdatedAt))
+                    delete latest.entries[id];
+            }
+            for (const [id, entry] of this.pendingEntries) {
+                const current = latest.entries[id];
+                if (!current || Date.parse(current.updated_at) <= Date.parse(entry.updated_at))
+                    latest.entries[id] = entry;
+            }
+            this.pruneIndex(latest);
+            this.writeIndex(latest);
+            this.index = latest;
+            this.pendingEntries.clear();
+            this.pendingDeletions.clear();
+            return true;
+        }
+        finally {
+            this.releaseLock(fd);
+        }
+    }
     prune() {
-        const index = this.readIndex();
-        const before = Object.keys(index.entries).length;
-        this.pruneIndex(index);
-        this.writeIndex(index);
+        this.flush();
+        const before = Object.keys(this.readIndex().entries).length;
+        const index = this.reconcile();
         const entries = Object.values(index.entries);
         return {
             removed: before - entries.length,
@@ -127,7 +248,7 @@ export class MarketCache {
         };
     }
     status() {
-        const index = this.readIndex();
+        const index = this.ensureIndex();
         const entries = Object.values(index.entries);
         return {
             root: this.root,
@@ -153,29 +274,30 @@ export class MarketCache {
         }
         this.pruneIndex(index);
         this.writeIndex(index);
+        this.index = index;
+        return index;
     }
     pruneIndex(index) {
         const now = Date.now();
         for (const [id, entry] of Object.entries(index.entries)) {
-            const path = join(this.dataRoot, entry.file);
-            if (now >= Date.parse(entry.expires_at) || !existsSync(path)) {
-                if (existsSync(path))
-                    unlinkSync(path);
+            if (now >= Date.parse(entry.expires_at)) {
+                this.removeDataFile(entry);
                 delete index.entries[id];
             }
         }
-        const lru = () => Object.entries(index.entries)
-            .sort(([, left], [, right]) => Date.parse(left.last_accessed_at) - Date.parse(right.last_accessed_at));
-        let bytes = Object.values(index.entries).reduce((sum, item) => sum + item.size, 0);
-        while (Object.keys(index.entries).length > this.policy.max_entries || bytes > this.policy.max_bytes) {
-            const [id, entry] = lru()[0] ?? [];
-            if (!id || !entry)
+        const entries = Object.entries(index.entries);
+        let bytes = entries.reduce((sum, [, item]) => sum + item.size, 0);
+        if (entries.length <= this.policy.max_entries && bytes <= this.policy.max_bytes)
+            return;
+        const lru = entries.sort(([, left], [, right]) => Date.parse(left.last_accessed_at) - Date.parse(right.last_accessed_at));
+        let count = entries.length;
+        for (const [id, entry] of lru) {
+            if (count <= this.policy.max_entries && bytes <= this.policy.max_bytes)
                 break;
-            const path = join(this.dataRoot, entry.file);
-            if (existsSync(path))
-                unlinkSync(path);
+            this.removeDataFile(entry);
             bytes -= entry.size;
             delete index.entries[id];
+            count -= 1;
         }
     }
 }

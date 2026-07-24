@@ -43,6 +43,8 @@ const HEADING = /^(#{1,6})\s+(.+)$/
 const BULLET = /^[-*•]\s+(.+)$/
 const ORDERED = /^\d+[.)、]\s+(.+)$/
 const LABEL = /^(结论|核心结论|当前结论|下一步|下一检查点|操作建议|下午操作建议|触发条件|失效条件|撤销条件|风险|主要风险|风险与下一检查点|判断依据|证据|数据时间|数据状态|阻断条件|执行结论|上午结论|市场走势与异动|内外围消息影响|持仓与候选|当前状态|需要确认)(?:\s*[:：]\s*(.*))?$/
+const TABLE_ROW = /^\|.*\|\s*$/
+const HR_ROW = /^-{3,}$/
 
 const clean = (value: string) => value.replace(/^\s+|\s+$/g, '').replace(/^(?:\*\*|__)(.*)(?:\*\*|__)$/, '$1')
 
@@ -187,8 +189,35 @@ export const buildMessagePresentation = (content: string, status?: ChatMessage['
 
   const flushLoose = () => {
     if (!loose.length) return
-    const text = loose.join(' ').trim()
-    if (text) (current ? current.paragraphs : paragraphs).push(text)
+    const target = current ? current.paragraphs : paragraphs
+    let prose: string[] = []
+    const flushProse = () => {
+      const text = prose.join(' ').trim()
+      if (text) target.push(text)
+      prose = []
+    }
+    let index = 0
+    while (index < loose.length) {
+      const line = loose[index]
+      if (TABLE_ROW.test(line)) {
+        flushProse()
+        const tableLines: string[] = []
+        while (index < loose.length && TABLE_ROW.test(loose[index])) {
+          tableLines.push(loose[index])
+          index += 1
+        }
+        target.push(tableLines.join('\n').trim())
+        continue
+      }
+      if (HR_ROW.test(line)) {
+        flushProse()
+        index += 1
+        continue
+      }
+      prose.push(line)
+      index += 1
+    }
+    flushProse()
     loose = []
   }
 
@@ -218,8 +247,16 @@ export const buildMessagePresentation = (content: string, status?: ChatMessage['
   }
   flushLoose()
 
+  const isOnlyHr = (value: string | undefined) => !value || /^\s*-{3,}\s*$/.test(value)
+  const pickLead = (list: string[]) => {
+    while (list.length > 0) {
+      const candidate = list.shift()
+      if (!isOnlyHr(candidate)) return candidate
+    }
+    return undefined
+  }
   const conclusionIndex = sections.findIndex((item) => /结论/.test(item.title) && item.paragraphs.length > 0)
-  const lead = conclusionIndex >= 0 ? sections[conclusionIndex].paragraphs.shift() : paragraphs.shift()
+  const lead = conclusionIndex >= 0 ? pickLead(sections[conclusionIndex].paragraphs) : pickLead(paragraphs)
   for (const item of sections) {
     const length = item.paragraphs.join('').length + item.items.join('').length
     item.collapsible = item.items.length > 4 || length > 280

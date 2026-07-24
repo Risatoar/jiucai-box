@@ -26,6 +26,32 @@ describe('stock strategy card payload', () => {
     expect(result.cards.map((card) => card.signal)).toEqual(['prepare_sell', 'watch'])
   })
 
+  it('解析执行条件已通过的立即卖出等级', () => {
+    const now = Date.now()
+    const immediate = {
+      code: '600150',
+      name: '中国船舶',
+      instrumentType: 'stock',
+      accountScope: '老婆 → 老婆的账户',
+      currentPrice: '32.96',
+      signal: 'immediate_sell',
+      stance: '持仓管理',
+      summary: '当前点位立即卖出',
+      buyPoints: [],
+      sellPoints: [{ label: '当前点位卖出', price: '32.96', condition: '完整破位且当前价格仍未收回' }],
+      risks: [],
+      evidence: ['完整15分钟破位'],
+      confidence: '高',
+      dataAsOf: new Date(now - 30_000).toISOString(),
+      executionValidUntil: new Date(now + 4 * 60_000).toISOString(),
+      executionStatus: 'ready',
+      executionBlockers: []
+    }
+    const result = parseStockStrategyCards(`<stock_strategy_cards>${JSON.stringify([immediate])}</stock_strategy_cards>`)
+
+    expect(result.cards[0]).toMatchObject({ signal: 'immediate_sell', executionStatus: 'ready' })
+  })
+
   it('流式生成机器数据时不把半截标签展示给用户', () => {
     expect(stripStockStrategyPayload('正在回答\n<stock_strategy_cards>[{"code":"510')).toBe('正在回答')
     expect(stripStockStrategyPayload('正在回答\n<stock_strategy_')).toBe('正在回答')
@@ -79,5 +105,23 @@ describe('stock strategy card payload', () => {
 
     expect(result.cards).toHaveLength(2)
     expect(result.cards.map((card) => card.accountScope)).toEqual(['我 → 我的主账户', '老婆 → 老婆的账户'])
+  })
+
+  it('不会在渲染前截断关键位的完整说明', () => {
+    const stopLoss = '按单笔最多亏20元反推；未确定买入价格前不生成虚假止损价，需先完成人工账户与成本复核'
+    const result = parseStockStrategyCards(`<stock_strategy_cards>${JSON.stringify([{
+      code: '600095',
+      name: '湘财股份',
+      stance: '可关注',
+      summary: '等待人工复核',
+      buyPoints: [],
+      sellPoints: [],
+      stopLoss,
+      risks: [],
+      evidence: [],
+      confidence: '中'
+    }])}</stock_strategy_cards>`)
+
+    expect(result.cards[0]?.stopLoss).toBe(stopLoss)
   })
 })

@@ -1,4 +1,5 @@
 import { generateStrategySignals } from './strategy-engine.js';
+import { loadActiveDecisionPolicy } from './strategy-policy.js';
 import { inferInstrument } from './providers.js';
 import { loadPortfolio } from './storage.js';
 function compactPoint(item) {
@@ -33,7 +34,9 @@ export async function replayPoints(market, code, date, asOf = `${date}T15:00:00+
         market.bars(code, '1m', 500, { start, end: asOf, asOf }),
         market.bars(code, '1d', 180, { end: `${date}T09:25:00+08:00`, asOf: `${date}T09:25:00+08:00` }),
     ]);
-    const engine = generateStrategySignals(instrument.type, intraday.bars, daily.bars);
+    const engine = generateStrategySignals(instrument.type, intraday.bars, daily.bars, {
+        decisionPolicy: loadActiveDecisionPolicy(),
+    });
     const actionable = engine.signals.filter((item) => item.level === 'confirm' || item.level === 'actionable');
     const observations = engine.signals.filter((item) => item.level === 'watch');
     const sourceEvents = portfolio.positions.flatMap((position) => position.sources ?? []).filter((event) => {
@@ -81,6 +84,7 @@ export async function replayPoints(market, code, date, asOf = `${date}T15:00:00+
         context: {
             daily_trend: engine.daily_trend,
             evidence_clusters: engine.evidence_clusters,
+            decision_policy_id: engine.decision_policy_id,
         },
         confirmed_points: actionable.map(compactPoint),
         watch_points: observations.map(compactPoint),

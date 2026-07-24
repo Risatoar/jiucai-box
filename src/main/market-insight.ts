@@ -83,20 +83,59 @@ const requestPayload = (request: MarketInsightRequest) => ({
   最近行情: request.bars.slice(-80)
 })
 
-export const generateMarketInsight = async (config: AiConfig, request: MarketInsightRequest, tradeContext: string) => {
-  const cacheKey = marketInsightCacheKey(request)
+export type UnifiedModelAnalysis = {
+  account_scope?: string | null
+  latest_signals?: Array<{
+    id?: string
+    side?: 'buy' | 'sell'
+    level?: string
+    kState?: string
+    price?: number
+    reasons?: string[]
+    invalidation?: string
+  }>
+  position_guidance?: { state?: string; trigger_signal_id?: string | null }
+}
+
+export const unifiedModelDecisionPoints = (analyses: UnifiedModelAnalysis[]) => {
+  const result: { buyPoints: MarketDecisionPoint[]; sellPoints: MarketDecisionPoint[] } = { buyPoints: [], sellPoints: [] }
+  for (const analysis of analyses) {
+    const signal = analysis.latest_signals?.find((item) => item.id === analysis.position_guidance?.trigger_signal_id)
+    if (!signal || !['buy', 'sell'].includes(signal.side || '') || signal.kState !== 'closed' || signal.level !== 'actionable' || !Number.isFinite(signal.price)) continue
+    const point: MarketDecisionPoint = {
+      label: signal.side === 'buy' ? '统一模型买点' : '统一模型卖点',
+      price: String(signal.price),
+      condition: signal.reasons?.join('；') || '统一模型闭合信号成立',
+      accountScope: analysis.account_scope?.replace(' → ', ' · ') || undefined
+    }
+    result[signal.side === 'buy' ? 'buyPoints' : 'sellPoints'].push(point)
+  }
+  result.buyPoints = result.buyPoints.slice(0, 3)
+  result.sellPoints = result.sellPoints.slice(0, 3)
+  return result
+}
+
+export const generateMarketInsight = async (config: AiConfig, request: MarketInsightRequest, tradeContext: string, unifiedAnalyses: UnifiedModelAnalysis[] = []) => {
+  const modelFingerprint = unifiedAnalyses.map((item) => `${item.account_scope}:${item.position_guidance?.trigger_signal_id || ''}`).join('|')
+  const cacheKey = `${marketInsightCacheKey(request)}|${modelFingerprint}`
   const cached = cache.get(cacheKey)
   if (!request.force && cached && Date.now() - cached.createdAt < MARKET_INSIGHT_REFRESH_MS) return cached.insight
   const prompt = [
-    '请基于下面的真实行情、确认持仓、纪律和已启用规则，生成该标的的即时交易辅助研判。页面不会展示底层策略信号，所以 buyPoints 和 sellPoints 必须是你综合本次真实证据后实际给出的盘中买卖参考，不得照抄未知策略名。若多个家庭成员持有同一标的，currentStrategy 和买卖点必须按成员和账户分别说明，不得合并成本或数量。',
+    '请基于下面的真实行情、确认持仓、纪律和统一买卖点模型证据，生成该标的的即时交易辅助研判。盘中 buyPoints 和 sellPoints 最终由宿主按统一模型 trigger_signal 强制回填，你不得自行补造价格。若多个家庭成员持有同一标的，currentStrategy 必须按成员和账户分别说明，不得合并成本或数量。',
     '禁止补造行情、持仓或成交；信息不足就写清楚。走势只能写条件化情景，不能承诺涨跌。forming K 线只能预警，执行建议必须等待 closed K 确认。',
     '如果任一下单检查 blocked，或纪律为 STOPPED，openPosition 必须为“不支持”且 buyPoints 必须为空数组。如果当前没有确认持仓，不得把历史仓位当成现有持仓；没有可靠买卖点时返回空数组，不得为了填字段编价格。',
     '仅返回一个 JSON 对象，不要 Markdown。字段必须为：stance（持仓管理/可关注/等待确认/暂不介入）、openPosition（支持/条件支持/不支持/无法判断）、currentStrategy、todayOutlook、nextSessionStrategy（仅盘后给次日方案，否则 null）、buyPoints、sellPoints、triggers（最多4条）、invalidation（最多4条）、evidence（最多4条）、confidence（低/中/高）。buyPoints 和 sellPoints 各最多3项，每项格式为 {label, price, condition, accountScope}；price 可以是单价或区间字符串，accountScope 用“成员 · 账户”，公共参考可省略。',
     `当前页面证据：${JSON.stringify(requestPayload(request))}`,
+    `统一买卖点模型证据：${JSON.stringify(unifiedAnalyses)}`,
     `用户确认交易记录：${tradeContext}`
   ].join('\n\n')
   const content = await sendAiMessage(config, [{ role: 'user', content: prompt }], { purpose: 'automation' })
   const insight = parseMarketInsight(content, request)
+  if (request.phase === 'intraday') {
+    const points = unifiedModelDecisionPoints(unifiedAnalyses)
+    insight.buyPoints = insight.openPosition === '不支持' ? [] : points.buyPoints
+    insight.sellPoints = points.sellPoints
+  }
   cache.set(cacheKey, { createdAt: Date.now(), insight })
   return insight
 }
