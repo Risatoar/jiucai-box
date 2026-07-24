@@ -3,9 +3,11 @@ import { join } from 'node:path';
 import { buildCandidateGoalProfile } from './candidate-goal-profile.js';
 import { buildMarketRegime, buildScreeningShortlist, CANDIDATE_MODEL_VERSION, rankModelCandidates } from './candidate-model.js';
 import { candidateModelStatus, evaluatePendingPredictions, recordCandidatePrediction } from './candidate-model-status.js';
+import { buildEffectiveCandidateGoals } from './candidate-constraints.js';
+import { buildCandidateUserProfile } from './candidate-user-profile.js';
+import { monitorCandidate } from './candidate-validation.js';
+import { buildMarketSectorSnapshot } from './market-sector-snapshot.js';
 import { readJson, tradeMasterHome, writeJson } from './storage.js';
-
-const TYPES = ['stock', 'etf', 'cbond'];
 
 function safeRead(relative, fallback) {
     const path = join(tradeMasterHome(), relative);
@@ -56,6 +58,18 @@ function poolDiff(previous, candidates) {
     return { added, removed, reordered, material_change: added.length > 0 || removed.length > 0 || reordered.length > 0 };
 }
 
+function nextAction(candidate) {
+    if (candidate.status === 'buy_ready')
+        return '人工复核买点';
+    return {
+        steady: '等待回踩企稳',
+        short_3d: '3日内等待放量',
+        medium_long: '等待趋势回踩',
+        hot_leader: '等待分歧转强',
+        limit_up: '只观察回封强度',
+    }[candidate.strategy_lane] ?? '继续观察';
+}
+
 function syncAiRecommendations(watchlist, candidates) {
     let added = 0;
     let updated = 0;
@@ -71,7 +85,20 @@ function syncAiRecommendations(watchlist, candidates) {
     for (const candidate of candidates) {
         const instrument = candidate.instrument;
         const index = instruments.findIndex((item) => item.code === instrument.code);
-        const recommendation = { ...instrument, score: candidate.score, reasons: candidate.reasons, signal: candidate.status === 'buy_ready' ? '模型买入条件已满足，等待人工复核' : '模型关注候选', model_version: CANDIDATE_MODEL_VERSION, status: 'active', source: 'agent', recommended_at: now };
+        const recommendation = {
+            ...instrument,
+            score: candidate.score,
+            reasons: candidate.reasons,
+            signal: candidate.status === 'buy_ready' ? '准备买入' : '观察',
+            strategyLane: candidate.strategy_lane,
+            strategyLabel: candidate.strategy_lane_label,
+            suitableFor: candidate.suitable_for,
+            nextAction: nextAction(candidate),
+            model_version: CANDIDATE_MODEL_VERSION,
+            status: 'active',
+            source: 'agent',
+            recommended_at: now,
+        };
         if (index < 0) {
             instruments.push(recommendation);
             added += 1;
@@ -85,7 +112,8 @@ function syncAiRecommendations(watchlist, candidates) {
         updated += 1;
     }
     writeJson(join(tradeMasterHome(), 'watchlist.json'), { ...watchlist, schema_version: 1, updated_at: now, instruments });
-    return { added, updated, removed, active: candidates.length };
+    const active = instruments.filter((item) => item.source === 'agent' && item.status === 'active').length;
+    return { added, updated, removed, active };
 }
 
 export async function refreshCandidatePool(market, asOf = new Date().toISOString(), options = {}) {
@@ -94,18 +122,29 @@ export async function refreshCandidatePool(market, asOf = new Date().toISOString
     const discipline = safeRead('discipline.json', { state: 'UNKNOWN' });
     const goals = safeRead('goals.json', { status: 'needs_confirmation' });
     const profile = safeRead('profile.json', {});
-    const goalProfile = buildCandidateGoalProfile(goals, profile, asOf);
+    const effectiveGoals = buildEffectiveCandidateGoals(goals, discipline);
+    const goalProfile = buildCandidateGoalProfile(effectiveGoals, profile, asOf);
+    const userProfile = buildCandidateUserProfile(profile, effectiveGoals);
     const previous = safeRead('runtime/candidate-pool.json', null);
     const heldCodes = new Set((portfolio.positions ?? []).filter((item) => item.quantity > 0 && item.status !== 'closed').map((item) => item.instrument?.code));
+    const userRemovedCodes = new Set((watchlist.instruments ?? [])
+        .filter((item) => item.status === 'removed' && item.removed_by === 'user')
+        .map((item) => item.code));
+    const userWatchCodes = new Set((watchlist.instruments ?? [])
+        .filter((item) => item.status === 'active' && item.source === 'user')
+        .map((item) => item.code));
+    const excludedCodes = new Set([...heldCodes, ...userRemovedCodes, ...userWatchCodes]);
     const activeAgentItems = (watchlist.instruments ?? []).filter((item) => item.source === 'agent' && item.status === 'active');
     const automatedRemovals = (watchlist.instruments ?? []).filter((item) => item.source === 'agent' && item.status === 'removed' && item.removed_by === 'agent_refresh' && item.removed_at);
     const latestRemoval = automatedRemovals.map((item) => item.removed_at).sort().at(-1);
     const previousAgentItems = activeAgentItems.length ? activeAgentItems : automatedRemovals.filter((item) => item.removed_at === latestRemoval);
     const previousAgentCodes = new Set(previousAgentItems.map((item) => item.code));
     const watchedCodes = new Set([...(watchlist.instruments ?? []).filter((item) => item.status === 'active').map((item) => item.code), ...previousAgentCodes]);
-    const maxCandidates = Math.max(1, Math.min(options.screeningOnly ? 20 : 5, finite(options.maxCandidates, options.screeningOnly ? 20 : 5)));
+    // 少选精选：默认 5 只；进取型及以上放宽到 8 只以覆盖龙头/热门/人气股
+    const aggressiveDefault = finite(userProfile?.risk_score, 50) >= 72 ? 8 : 5;
+    const maxCandidates = Math.max(1, Math.min(options.screeningOnly ? 45 : aggressiveDefault, finite(options.maxCandidates, options.screeningOnly ? 45 : aggressiveDefault)));
     const settled = [];
-    for (const type of TYPES) {
+    for (const type of userProfile.allowed_instrument_types) {
         try {
             settled.push({ status: 'fulfilled', value: { type, ...(await market.universe(type)) } });
         }
@@ -115,7 +154,7 @@ export async function refreshCandidatePool(market, asOf = new Date().toISOString
     }
     const successful = settled.filter((item) => item.status === 'fulfilled').map((item) => ({ ...item.value, items: [...item.value.items] }));
     if (!successful.length) {
-        const sourceErrors = settled.map((item, index) => item.status === 'rejected' ? `${TYPES[index]}: ${item.reason?.message ?? String(item.reason)}` : '').filter(Boolean);
+        const sourceErrors = settled.map((item, index) => item.status === 'rejected' ? `${userProfile.allowed_instrument_types[index]}: ${item.reason?.message ?? String(item.reason)}` : '').filter(Boolean);
         const failed = {
             ...(previous ?? { schema_version: 1, mode: 'candidate_refresh', candidates: [], market_breadth: [], benchmarks: [] }),
             generated_at: new Date().toISOString(),
@@ -156,7 +195,14 @@ export async function refreshCandidatePool(market, asOf = new Date().toISOString
             group.items.push(item);
     }
     const marketRegime = buildMarketRegime(successful);
-    const preliminary = buildScreeningShortlist(successful, heldCodes, watchedCodes, previousAgentCodes, options.screeningOnly ? 20 : 36);
+    let marketSectors;
+    try {
+        marketSectors = await market.sectors();
+    }
+    catch {
+        marketSectors = buildMarketSectorSnapshot(successful);
+    }
+    const preliminary = buildScreeningShortlist(successful, excludedCodes, watchedCodes, previousAgentCodes, 45, userProfile, marketRegime, marketSectors);
     const reevaluationCount = preliminary.filter((item) => previousAgentCodes.has(item.instrument.code)).length;
     let candidates;
     let buyReadyCandidates = [];
@@ -172,30 +218,35 @@ export async function refreshCandidatePool(market, asOf = new Date().toISOString
         }));
     }
     else {
-        const validations = await mapLimit(preliminary, 5, (candidate) => monitorCandidate(market, candidate));
-        const modelResult = rankModelCandidates(preliminary, validations, marketRegime, maxCandidates, goalProfile);
+        const validations = await mapLimit(preliminary, 5, (candidate) => monitorCandidate(market, candidate, userProfile));
+        const modelResult = rankModelCandidates(preliminary, validations, marketRegime, maxCandidates, goalProfile, userProfile);
         candidates = modelResult.watchCandidates;
         buyReadyCandidates = modelResult.buyReadyCandidates;
         analyzed = modelResult.analyzed;
     }
     const benchmarks = successful.flatMap(({ items }) => items).filter((item) => ['510300', '510050', '159915', '588000', '512100', '513100', '513500'].includes(item.instrument.code))
         .map((item) => ({ code: item.instrument.code, name: item.instrument.name, price: item.price, change_percent: round(finite(item.changeRatio) * 100, 2), amount: item.amount }));
-    if (options.screeningOnly && candidates.length < 5) {
+    if (options.screeningOnly && candidates.length === 0) {
         const failed = {
             ...(previous ?? { schema_version: 1, mode: 'candidate_refresh', candidates: [] }),
             generated_at: new Date().toISOString(),
             as_of: asOf,
             refresh_status: 'failed',
             stale_pool_preserved: Boolean(previous),
-            source_errors: [`三类市场共返回 ${successful.reduce((sum, item) => sum + item.items.length, 0)} 条行情，但只有 ${candidates.length} 条通过候选初筛，未达到 AI 深度分析最低 5 条`],
+            source_errors: [`画像允许的市场共返回 ${successful.reduce((sum, item) => sum + item.items.length, 0)} 条行情，但没有标的通过候选初筛`],
             attempted_market_breadth: successful.map(({ type, items }) => summarizeUniverse(type, items)),
-            disclaimer: '候选不足时禁止调用 AI 或清空原关注列表。',
+            disclaimer: '没有合格候选时禁止调用 AI 或清空原关注列表。',
         };
         writeJson(join(tradeMasterHome(), 'runtime', 'candidate-pool.json'), failed);
         return failed;
     }
     const diff = poolDiff(previous, candidates);
-    const watchlistSync = options.syncWatchlist === false ? null : syncAiRecommendations(watchlist, candidates);
+    const strategyBasketsComplete = options.screeningOnly || candidates.length >= (finite(userProfile?.risk_score, 50) >= 72 ? 7 : 5);
+    const watchlistSync = options.syncWatchlist === false
+        ? null
+        : strategyBasketsComplete
+            ? syncAiRecommendations(watchlist, candidates)
+            : { skipped: true, reason: `五策略篮子只形成 ${candidates.length}/5 个候选，保留原关注列表` };
     const pool = {
         schema_version: 1,
         mode: 'candidate_refresh',
@@ -206,28 +257,34 @@ export async function refreshCandidatePool(market, asOf = new Date().toISOString
         entry_gate: ['STOPPED', 'COOLDOWN'].includes(discipline.state) ? 'blocked_by_discipline' : 'manual_confirmation_required',
         input_state: { portfolio_as_of: portfolio.as_of ?? null, discipline: discipline.state, goals_status: goals.status ?? null, goal_profile_active: goalProfile.active },
         market_breadth: successful.map(({ type, items }) => summarizeUniverse(type, items)),
+        market_sectors: marketSectors,
         benchmarks,
         candidates,
         watchlist_sync: watchlistSync,
         diff,
-        source_errors: settled.flatMap((item, index) => item.status === 'rejected' ? [`${TYPES[index]}: ${item.reason?.message ?? String(item.reason)}`] : []),
+        source_errors: settled.flatMap((item, index) => item.status === 'rejected' ? [`${userProfile.allowed_instrument_types[index]}: ${item.reason?.message ?? String(item.reason)}`] : []),
         buy_ready_candidates: buyReadyCandidates,
         model: { ...candidateModelStatus(), model_version: CANDIDATE_MODEL_VERSION },
         market_regime: marketRegime,
         goal_profile: goalProfile,
+        effective_constraints: effectiveGoals.constraints,
+        user_profile_policy: userProfile,
         analyzed_candidates: analyzed,
         reevaluation: { requested: previousAgentCodes.size, reviewed: reevaluationCount },
         selection_policy: {
             maximum_candidates: maxCandidates,
             forced_minimum: false,
+            strategy_baskets_complete: strategyBasketsComplete,
             mode: options.screeningOnly ? 'asset_specific_ai_review_shortlist' : 'candidate_model_v2',
             requirement: options.screeningOnly
-                ? '股票、ETF、可转债分别做横截面初筛，之后补充日线风险与5/15分钟证据'
-                : '分资产模型、设置中的盈利目标与期限、资金暴露和交易成本、最大回撤、日线趋势、完整5/15分钟闭合结构、独立量能和非追涨条件',
+                ? '按画像允许的品种分别做横截面初筛最多45个，之后补充日线风险与5/15分钟证据'
+                : '成功结果固定5只且代码不重复：五类策略各1只；严格门槛不足时只允许观察级补位，不能自动变成买入就绪',
         },
         disclaimer: options.screeningOnly
             ? '这是交给深度分析的模型初筛，不是买入信号。'
-            : '只输出0至5个通过绝对门槛的模型关注候选；真正买入就绪同样允许为0个。模型仍在影子验证期，不保证胜率或盈利，不连接、不操作券商账户。',
+            : strategyBasketsComplete
+                ? '五类策略各1只，共5只；真正买入就绪仍允许为0。打板候选只是高风险观察，不是追涨或自动买入指令。'
+                : `五策略篮子只形成 ${candidates.length}/5 个候选，本轮不替换原关注列表。`,
     };
     writeJson(join(tradeMasterHome(), 'runtime', 'candidate-pool.json'), pool);
     if (!options.screeningOnly) {
@@ -252,106 +309,6 @@ async function mapLimit(items, limit, mapper) {
     return results;
 }
 
-function closedBars(result) {
-    return (result?.bars ?? []).filter((bar) => bar.closed !== false);
-}
-function average(values) {
-    const usable = values.filter(Number.isFinite);
-    return usable.length ? usable.reduce((sum, value) => sum + value, 0) / usable.length : null;
-}
-function returnPercent(bars, periods) {
-    const selected = bars.slice(-(periods + 1));
-    const first = finite(selected.at(0)?.close, NaN);
-    const last = finite(selected.at(-1)?.close, NaN);
-    return Number.isFinite(first) && first > 0 && Number.isFinite(last) ? round((last / first - 1) * 100, 2) : null;
-}
-function standardDeviation(values) {
-    const usable = values.filter(Number.isFinite);
-    if (usable.length < 2)
-        return null;
-    const mean = usable.reduce((sum, value) => sum + value, 0) / usable.length;
-    return Math.sqrt(usable.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (usable.length - 1));
-}
-function dailyReturns(closes) {
-    return closes.slice(1).map((close, index) => closes[index] > 0 ? close / closes[index] - 1 : NaN).filter(Number.isFinite);
-}
-function downsideDeviation(values) {
-    if (!values.length)
-        return null;
-    return Math.sqrt(values.reduce((sum, value) => sum + Math.min(0, value) ** 2, 0) / values.length);
-}
-function dailyStructure(bars) {
-    const closes = bars.map((bar) => finite(bar.close, NaN)).filter(Number.isFinite);
-    const last = closes.at(-1) ?? null;
-    const ma5 = average(closes.slice(-5));
-    const ma20 = average(closes.slice(-20));
-    const recentHigh = Math.max(...bars.slice(-20).map((bar) => finite(bar.high, NaN)).filter(Number.isFinite));
-    const returns = dailyReturns(closes.slice(-21));
-    return {
-        sample_count: closes.length,
-        close: last,
-        ma5: ma5 == null ? null : round(ma5, 4),
-        ma20: ma20 == null ? null : round(ma20, 4),
-        above_ma20: last != null && ma20 != null ? last >= ma20 : null,
-        return_5d_percent: returnPercent(bars, 5),
-        return_20d_percent: returnPercent(bars, 20),
-        drawdown_from_20d_high_percent: last != null && Number.isFinite(recentHigh) && recentHigh > 0 ? round((last / recentHigh - 1) * 100, 2) : null,
-        realized_volatility_20d_percent: standardDeviation(returns) == null ? null : round(standardDeviation(returns) * 100, 2),
-        downside_volatility_20d_percent: downsideDeviation(returns) == null ? null : round(downsideDeviation(returns) * 100, 2),
-    };
-}
-
-async function monitorCandidate(market, candidate) {
-    try {
-        const [evidence5, result15, resultDaily] = await Promise.all([
-            market.evidence(candidate.instrument.code, '5m', 24),
-            market.bars(candidate.instrument.code, '15m', 16),
-            market.bars(candidate.instrument.code, '1d', 40),
-        ]);
-        const bars5 = closedBars({ bars: evidence5.bars });
-        const bars15 = closedBars(result15);
-        const dailyBars = closedBars(resultDaily);
-        const last5 = bars5.at(-1);
-        const previous5 = bars5.at(-2);
-        const last15 = bars15.at(-1);
-        const quote = evidence5.quotes[0] ?? null;
-        const recentVolumes = bars5.slice(-6, -1).map((bar) => finite(bar.volume)).filter((value) => value > 0);
-        const averageVolume = recentVolumes.length ? recentVolumes.reduce((sum, value) => sum + value, 0) / recentVolumes.length : 0;
-        const fiveMinuteConfirmed = Boolean(last5 && previous5 && last5.close > last5.open && last5.close > previous5.close);
-        const fifteenMinuteConfirmed = Boolean(last15 && last15.close >= last15.open);
-        const volumeConfirmed = Boolean(last5 && averageVolume > 0 && finite(last5.volume) >= averageVolume * 1.05);
-        const change = finite(quote?.changeRatio);
-        const chasing = change > (candidate.type === 'cbond' ? 0.08 : 0.05) || (quote?.high && (quote.high - quote.price) / quote.high < 0.005 && change > 0.03);
-        const verified = evidence5.market_state.verified && last5?.closed !== false && last15?.closed !== false;
-        const status = !verified ? 'market_unavailable' : chasing ? 'waiting' : fiveMinuteConfirmed && fifteenMinuteConfirmed && volumeConfirmed ? 'attention' : 'waiting';
-        return {
-            code: candidate.instrument.code,
-            name: candidate.instrument.name,
-            type: candidate.type,
-            rank: candidate.rank,
-            status,
-            price: quote?.price ?? candidate.price,
-            change_percent: round(change * 100, 2),
-            checks: { quote_and_closed_bars_verified: verified, five_minute_structure: fiveMinuteConfirmed, fifteen_minute_structure: fifteenMinuteConfirmed, independent_volume: volumeConfirmed, chasing_risk: chasing },
-            technical_evidence: {
-                daily: dailyStructure(dailyBars),
-                intraday: {
-                    five_minute_structure: fiveMinuteConfirmed,
-                    fifteen_minute_structure: fifteenMinuteConfirmed,
-                    latest_volume_vs_recent_average: last5 && averageVolume > 0 ? round(finite(last5.volume) / averageVolume, 2) : null,
-                },
-                sources: [evidence5.provider_errors?.length ? 'partial' : 'verified', result15.source, resultDaily.source].filter(Boolean),
-            },
-            blockers: [!verified && '实时行情或闭合K线未通过验证', chasing && '追涨风险偏高', !fiveMinuteConfirmed && '5分钟结构未确认', !fifteenMinuteConfirmed && '15分钟结构未确认', !volumeConfirmed && '量能证据不足'].filter(Boolean),
-            conclusion: status === 'attention' ? '可重点关注，仍须人工核对账户、纪律、费用和现金安全垫' : status === 'waiting' ? '继续等待，不构成买入信号' : '行情证据不可用，不做交易判断',
-            data_as_of: evidence5.market_state.latest_exchange_time,
-        };
-    }
-    catch (error) {
-        return { code: candidate.instrument.code, name: candidate.instrument.name, type: candidate.type, rank: candidate.rank, status: 'market_unavailable', conclusion: '行情证据不可用，不做交易判断', error: error instanceof Error ? error.message : String(error) };
-    }
-}
-
 export async function monitorCandidatePool(market, limit = 12) {
     const pool = safeRead('runtime/candidate-pool.json', null);
     if (!pool?.candidates?.length)
@@ -359,31 +316,47 @@ export async function monitorCandidatePool(market, limit = 12) {
     const discipline = safeRead('discipline.json', { state: 'UNKNOWN' });
     const goals = safeRead('goals.json', { status: 'needs_confirmation' });
     const profile = safeRead('profile.json', {});
-    const goalProfile = buildCandidateGoalProfile(goals, profile);
+    const effectiveGoals = buildEffectiveCandidateGoals(goals, discipline);
+    const goalProfile = buildCandidateGoalProfile(effectiveGoals, profile);
+    const userProfile = buildCandidateUserProfile(profile, effectiveGoals);
     const previous = safeRead('runtime/candidate-monitor-latest.json', null);
     const poolCandidates = pool.candidates.slice(0, limit);
-    const validations = await mapLimit(poolCandidates, 3, (candidate) => monitorCandidate(market, candidate));
-    const reranked = rankModelCandidates(poolCandidates, validations, pool.market_regime ?? { state: 'mixed' }, Math.min(5, limit), goalProfile);
+    const validations = await mapLimit(poolCandidates, 3, (candidate) => monitorCandidate(market, candidate, userProfile));
+    const reranked = rankModelCandidates(poolCandidates, validations, pool.market_regime ?? { state: 'mixed' }, Math.min(10, limit), goalProfile, userProfile);
     const candidates = reranked.watchCandidates.map((candidate) => ({
         code: candidate.instrument.code,
         name: candidate.instrument.name,
         type: candidate.type,
         rank: candidate.rank,
         status: candidate.status,
+        strategy_type: candidate.strategy_type,
+        strategy_lane: candidate.strategy_lane,
+        strategy_lane_label: candidate.strategy_lane_label,
+        suitable_for: candidate.suitable_for,
+        strategy_lane_score: candidate.strategy_lane_score,
+        selection_tier: candidate.selection_tier,
         price: candidate.validation?.price ?? candidate.price,
         change_percent: candidate.validation?.change_percent ?? candidate.change_percent,
         ranking_score: candidate.ranking_score,
         cost_efficiency: candidate.component_scores?.cost_efficiency,
         goal_alignment: candidate.component_scores?.goal_alignment,
+        profile_alignment: candidate.component_scores?.profile_alignment,
         goal_required_return_20d_percent: candidate.component_scores?.goal_required_return_20d_percent,
         opportunity_capacity_20d_percent: candidate.component_scores?.opportunity_capacity_20d_percent,
         checks: candidate.validation?.checks,
         technical_evidence: candidate.validation?.technical_evidence,
         blockers: candidate.validation?.blockers ?? [],
         risks: candidate.risks ?? [],
+        personalization: candidate.personalization,
+        opportunity_evidence: candidate.opportunity_evidence,
+        leadership_assessment: candidate.leadership_assessment,
+        affordability: candidate.affordability,
+        fundamental_assessment: candidate.fundamental_assessment,
         conclusion: candidate.status === 'buy_ready'
             ? '模型与实时入场条件均已满足，仍须人工核对账户、纪律、费用和现金安全垫'
-            : '模型关注门槛通过，但尚未达到买入就绪条件',
+            : candidate.selection_tier === 'fallback'
+                ? '属于观察级补位，仅满足该策略的基础特征，尚未达到严格关注门槛和买入条件'
+                : '模型关注门槛通过，但尚未达到买入就绪条件',
         data_as_of: candidate.validation?.data_as_of,
     }));
     const rejected = reranked.rejectedCandidates.map((candidate) => ({
@@ -391,13 +364,16 @@ export async function monitorCandidatePool(market, limit = 12) {
         name: candidate.instrument.name,
         type: candidate.type,
         ranking_score: candidate.ranking_score,
+        strategy_type: candidate.strategy_type,
         cost_efficiency: candidate.component_scores?.cost_efficiency,
         goal_alignment: candidate.component_scores?.goal_alignment,
         goal_required_return_20d_percent: candidate.component_scores?.goal_required_return_20d_percent,
         opportunity_capacity_20d_percent: candidate.component_scores?.opportunity_capacity_20d_percent,
         status: 'model_rejected',
         risks: candidate.risks ?? [],
-        conclusion: '实时短周期信号即使满足，盈利目标覆盖率、回撤预算、模型绝对门槛或成本效率未通过，不再列入关注候选',
+        leadership_assessment: candidate.leadership_assessment,
+        affordability: candidate.affordability,
+        conclusion: '日线趋势、主线反弹或策略篮子基础特征未通过，不再列入关注候选',
         data_as_of: candidate.validation?.data_as_of,
     }));
     const oldItems = [...(previous?.candidates ?? []), ...(previous?.rejected ?? [])];
@@ -416,12 +392,15 @@ export async function monitorCandidatePool(market, limit = 12) {
         generated_at: new Date().toISOString(),
         pool_generated_at: pool.generated_at,
         goal_profile: goalProfile,
+        effective_constraints: effectiveGoals.constraints,
+        user_profile_policy: userProfile,
         entry_gate: ['STOPPED', 'COOLDOWN'].includes(discipline.state) ? 'blocked_by_discipline' : 'manual_confirmation_required',
         candidates,
+        buy_ready_candidates: candidates.filter((item) => item.status === 'buy_ready'),
         rejected,
         changes,
         material_change: changes.length > 0 || (!previous && candidates.some((item) => item.status === 'buy_ready')),
-        disclaimer: '盘中短周期信号不能绕过盈利目标覆盖率、最大回撤、模型总分与成本效率门槛；buy_ready 仍不是买入指令，任何交易都必须由用户人工确认。',
+        disclaimer: '观察级候选可以未通过收益目标、回撤预算、总分或成本效率严格门槛；这些条件仍会阻止 buy_ready。任何交易都必须由用户人工确认。',
     };
     writeJson(join(tradeMasterHome(), 'runtime', 'candidate-monitor-latest.json'), result);
     return result;
